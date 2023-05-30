@@ -15,8 +15,13 @@
     "expo": "~48.0.15",
     "expo-av": "^13.2.1",
     "expo-status-bar": "~1.4.4",
+    "fp-ts": "^2.16.0",
+    "io-ts": "^2.2.20",
     "jest": "^29.2.1",
     "jest-expo": "^48.0.2",
+    "monocle-ts": "^2.3.13",
+    "newtype-ts": "^0.3.5",
+    "parser-ts": "^0.7.0",
     "react": "18.2.0",
     "react-native": "0.71.8",
     "typescript": "^4.9.4",
@@ -25,6 +30,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "@relmify/jest-fp-ts": "^2.0.2",
     "@types/jest": "^29.5.1",
     "@types/react-test-renderer": "^18.0.0",
     "jest": "^29.2.1",
@@ -33,6 +39,7 @@
   "private": true,
   "jest": {
     "preset": "jest-expo",
+    "setupFilesAfterEnv": ["@relmify/jest-fp-ts"],
     "collectCoverage": true,
     "collectCoverageFrom": [
       "**/*.{ts,tsx}",
