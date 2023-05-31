@@ -1,4 +1,6 @@
-import { parseMessage, parseDitDahString } from './parser';
+import { parseMessage, parseDitDahString, ditDahSeqFromCwSymbolSeq } from './parser';
+
+import * as E from 'fp-ts/lib/Either';
 
 describe('DitDahSeq', () => {
     it("should work", () => {
@@ -8,5 +10,6 @@ describe('DitDahSeq', () => {
 
         const symDec = parseMessage("HELLO, world 73 <BT> \n");
         console.log(symDec);
+        console.log(E.map(ditDahSeqFromCwSymbolSeq)(symDec));
     });
 });

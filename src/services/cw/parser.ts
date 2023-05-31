@@ -7,22 +7,23 @@ import * as E from 'fp-ts/Either';
 import * as O from 'fp-ts/Option';
 import * as A from 'fp-ts/ReadonlyArray';
 import * as R from 'fp-ts/ReadonlyRecord';
+import * as M from 'fp-ts/ReadonlyMap';
 import { pipe } from 'fp-ts/function';
 
 // parser-ts
 import * as P from 'parser-ts/Parser';
-import * as C from 'parser-ts/char'
+import * as PC from 'parser-ts/char'
 import * as PS from 'parser-ts/string'
 import { run } from 'parser-ts/code-frame'
 
 // local
-import { CW_SYMBOLS } from './constants';
+import { CW_SYMBOLS, CwSymbolInfo } from './constants';
 
 const prosignParser = PS.fold([
     P.succeed('<'),
     pipe(
-        C.many1(C.upper),
-        P.between(C.char("<"), C.char(">")),
+        PC.many1(PC.upper),
+        P.between(PC.char("<"), PC.char(">")),
     ),
     P.succeed('>'),
 ]);
@@ -36,6 +37,7 @@ export const DitDahChar = t.keyof({
     '.': null,
     '-': null,
     ' ': null,
+    '/': null,
 })
 
 export const DitDahSeq = t.array(DitDahChar);
@@ -52,13 +54,27 @@ type CwSymbolSeq = t.TypeOf<typeof CwSymbolSeq>;
 
 const STR_TO_CW_SYMBOL = pipe(
     CW_SYMBOLS,
-    R.foldMapWithIndex(S.Ord)(A.getMonoid<[string, string]>())(
+    R.foldMapWithIndex(S.Ord)(A.getMonoid<[string, CwSymbol]>())(
         (k, v) => pipe(
             v.str,
-            A.map((s) => ([s, k])),
+            A.map((s) => ([s, k as CwSymbol])),
         ),
     ),
     R.fromEntries,
+);
+
+const CW_SYMBOL_MAP = new Map(Object.entries(CW_SYMBOLS)) as ReadonlyMap<CwSymbol, CwSymbolInfo>;
+
+export const ditDahFromCwSymbol = (sym: CwSymbol) => pipe(
+    CW_SYMBOL_MAP,
+    M.lookup(S.Eq)(sym),
+    O.map((symInfo) => symInfo.cw.split('') as DitDahSeq),
+    O.getOrElse(() => [] as DitDahSeq),
+);
+
+export const ditDahSeqFromCwSymbolSeq = (symSeq: CwSymbolSeq) => pipe(
+    symSeq,
+    A.flatMap(ditDahFromCwSymbol),
 );
 
 export const parseDitDahString = (input: string) => pipe(
@@ -73,12 +89,12 @@ export const parseCwString = (input: string) => pipe(
     CwSymbolSeq.decode,
 );
 
-export const parseToken = (input: string): t.Validation<string> => pipe(
+export const parseMessageToken = (input: string) => pipe(
     STR_TO_CW_SYMBOL,
     R.lookup(input),
     O.fold(
         () => t.failure(input, [], `Could not find symbol for "${input}"`),
-        t.success,
+        t.success<CwSymbol>,
     )
 )
 
@@ -88,6 +104,6 @@ export const parseMessage = (input: string) => pipe(
         (strErr) => t.failure(input, [], strErr),
         t.success<readonly string[]>,
     ),
-    E.chain(E.traverseArray(parseToken)),
+    E.chain(E.traverseArray(parseMessageToken)),
     E.chain(CwSymbolSeq.decode),
 );
