@@ -1,4 +1,4 @@
-import { parseCwSymbolString, parseDitDahString } from './parser';
+import { parseMessage, parseDitDahString } from './parser';
 
 describe('DitDahSeq', () => {
     it("should work", () => {
@@ -6,7 +6,7 @@ describe('DitDahSeq', () => {
         console.log(dec);
         expect(dec).toEqualRight(['-', '-', '-', ' ', '-', '.', '-']);
 
-        const symDec = parseCwSymbolString("HELLO, world 73");
+        const symDec = parseMessage("HELLO, world 73 <BT> \n");
         console.log(symDec);
     });
 });

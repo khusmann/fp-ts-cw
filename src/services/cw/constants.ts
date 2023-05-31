@@ -1,5 +1,10 @@
 
-export const CW_SYMBOL_DICT = {
+export type CwSymbolInfo = {
+    cw: string;
+    str: string[];
+};
+
+export const CW_SYMBOLS = {
     A: {
         cw: '.-',
         str: ['A'],
