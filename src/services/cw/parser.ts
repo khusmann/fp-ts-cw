@@ -11,26 +11,24 @@ import * as M from 'fp-ts/ReadonlyMap';
 import { pipe } from 'fp-ts/function';
 
 // parser-ts
-import * as P from 'parser-ts/Parser';
-import * as PC from 'parser-ts/char'
-import * as PS from 'parser-ts/string'
+import { parser, char , string } from 'parser-ts';
 import { run } from 'parser-ts/code-frame'
 
 // local
 import { CW_SYMBOLS, CwSymbolInfo } from './constants';
 
-const prosignParser = PS.fold([
-    P.succeed('<'),
+const prosignParser = string.fold([
+    parser.succeed('<'),
     pipe(
-        PC.many1(PC.upper),
-        P.between(PC.char("<"), PC.char(">")),
+        char.many1(char.upper),
+        parser.between(char.char("<"), char.char(">")),
     ),
-    P.succeed('>'),
+    parser.succeed('>'),
 ]);
 
 const messageTokenizer = pipe(
-    P.either(prosignParser, P.item<string>),
-    P.many1,
+    parser.either(prosignParser, parser.item<string>),
+    parser.many1,
 )
 
 export const DitDahChar = t.keyof({
