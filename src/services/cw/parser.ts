@@ -17,7 +17,7 @@ import { CHAR_LOOKUP, PROSIGN_LOOKUP, LETTER_SEP, WORD_SEP, TONE_SEP, DIT, DAH }
 
 import type { ToneSeq, Tone } from './constants';
 
-const parserLiftOption = <I, O>(p: parser.Parser<I, O.Option<O>>) => pipe(
+const parserUnwrapOption = <I, O>(p: parser.Parser<I, O.Option<O>>) => pipe(
     p,
     parser.chain((o) => pipe(
         o,
@@ -39,13 +39,13 @@ const failIfNotEof = <I, O>(p: parser.Parser<I, O>) => pipe(
 const prosignParser = pipe(
     parser.between(char.char("<"), char.char(">"))(char.many1(char.upper)),
     parser.map((s) => R.lookup(`<${s}>`)(PROSIGN_LOOKUP)),
-    parserLiftOption,
+    parserUnwrapOption,
 );
 
 const charParser = pipe(
     parser.item<string>(),
     parser.map((s) => R.lookup(s.toUpperCase())(CHAR_LOOKUP)),
-    parserLiftOption,
+    parserUnwrapOption,
 );
 
 const wordParser = pipe(
