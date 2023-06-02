@@ -1,9 +1,10 @@
-import { parseMessage, stringFromToneSeq, messageParser } from './parser';
+import { parseMessage, stringFromToneSeq, messageParser, timingSeqFromToneSeq } from './parser';
 
 import { run } from 'parser-ts/code-frame';
 
 import { pipe } from 'fp-ts/function';
-import * as E from 'fp-ts/lib/Either';
+import * as E from 'fp-ts/Either';
+import * as R from 'fp-ts/Reader';
 
 describe("ToneSeq", () => {
     it("decodes valid text with prosigns", () => {
@@ -18,5 +19,16 @@ describe("ToneSeq", () => {
             parseMessage("<BR>"),
         )
         expect(result).toBeLeft();
+    });
+    it("debug", () => {
+        const result = pipe(
+            { wpm: 20, farnsworth: 10, ews: 0 },
+            pipe(
+                run(messageParser, "HELLo, + world 73 <BT>  \n"),
+                E.map((pr) => timingSeqFromToneSeq(pr)),
+                E.sequence(R.Applicative)
+            )
+        )
+        console.log(result);
     });
 });

@@ -5,6 +5,7 @@ import * as O from 'fp-ts/Option';
 import * as A from 'fp-ts/ReadonlyArray';
 import * as NEA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as R from 'fp-ts/ReadonlyRecord';
+import * as RD from 'fp-ts/Reader';
 import * as M from 'fp-ts/ReadonlyMap';
 import { pipe } from 'fp-ts/function';
 
@@ -16,6 +17,39 @@ import { parser, char, stream } from 'parser-ts';
 import { CHAR_LOOKUP, PROSIGN_LOOKUP, LETTER_SEP, WORD_SEP, TONE_SEP, DIT, DAH } from './constants';
 
 import type { ToneSeq, Tone } from './constants';
+
+type Pulse = {
+    readonly tone: Tone;
+    readonly duration: number;
+};
+
+type TimingSeq = NEA.ReadonlyNonEmptyArray<Pulse>;
+
+type CwSettings = {
+    readonly wpm: number;
+    readonly farnsworth: number;
+    readonly ews: number;
+};
+
+const ditTime = (wpm: number) => 1.2 / wpm;
+const dahTime = (wpm: number) => 3 * ditTime(wpm);
+const fditTime = (wpm: number, farnsworth: number) => (60 - farnsworth * 31 * ditTime(wpm)) / (farnsworth * (12+7));
+const letterSpaceTime = (wpm: number, farnsworth: number) => farnsworth ? 3*fditTime(wpm, farnsworth): 3*ditTime(wpm);
+const wordSpaceTime = (wpm: number, farnsworth: number, ews: number) => 7 * (ews + 1) * (farnsworth ? fditTime(wpm, farnsworth): ditTime(wpm));
+
+const pulseFromTone = (t: Tone): RD.Reader<CwSettings, Pulse> => (settings: CwSettings) => match(t)
+    .with(DIT, () => ({ tone: DIT, duration: ditTime(settings.wpm) } as const))
+    .with(DAH, () => ({ tone: DAH, duration: dahTime(settings.wpm) } as const))
+    .with(LETTER_SEP, () => ({ tone: LETTER_SEP, duration: letterSpaceTime(settings.wpm, settings.farnsworth) } as const))
+    .with(WORD_SEP, () => ({ tone: WORD_SEP, duration: wordSpaceTime(settings.wpm, settings.farnsworth, settings.ews) } as const))
+    .with(TONE_SEP, () => ({ tone: TONE_SEP, duration: ditTime(settings.wpm) } as const))
+    .exhaustive()
+
+export const timingSeqFromToneSeq = (ts: ToneSeq): RD.Reader<CwSettings, TimingSeq> => pipe(
+    ts,
+    NEA.map(pulseFromTone),
+    NEA.sequence(RD.Applicative),
+)
 
 const parserUnwrapOption = <I, O>(p: parser.Parser<I, O.Option<O>>) => pipe(
     p,
