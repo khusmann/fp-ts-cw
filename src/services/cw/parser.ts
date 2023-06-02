@@ -28,6 +28,14 @@ const parserLiftOption = <I, O>(p: parser.Parser<I, O.Option<O>>) => pipe(
     )),
 )
 
+const failIfNotEof = <I, O>(p: parser.Parser<I, O>) => pipe(
+    p,
+    parser.chain((m) => pipe(
+        parser.expected(parser.eof<I>(), "failed to parse to end of input"),
+        parser.chain(() => parser.succeed(m)),
+    )),
+)
+
 const prosignParser = pipe(
     parser.between(char.char("<"), char.char(">"))(char.many1(char.upper)),
     parser.map((s) => R.lookup(`<${s}>`)(PROSIGN_LOOKUP)),
@@ -47,11 +55,12 @@ const wordParser = pipe(
     ),
 );
 
-const messageParser = pipe(
+export const messageParser = pipe(
     parser.sepBy1(parser.many1(char.char(' ')), parser.either(prosignParser, () => wordParser)),
     parser.map(
         NEA.intercalate(NEA.getSemigroup<Tone>())(NEA.of(WORD_SEP))
     ),
+    failIfNotEof,
 );
 
 export const parseMessage = (s: string) => pipe(
