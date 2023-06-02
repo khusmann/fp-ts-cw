@@ -9,7 +9,7 @@ describe('DitDahSeq', () => {
     it("should work", () => {
 
         const result = pipe(
-            parseMessage2("HELLO, world 73 <BT> \n"),
+            parseMessage2("HELLO, world  73 <BT> \n"),
             E.map((pr) => stringFromToneSeq(pr.value))
         )
         

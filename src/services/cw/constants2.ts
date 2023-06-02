@@ -1,4 +1,4 @@
-
+import * as NEA from 'fp-ts/ReadonlyNonEmptyArray';
 
 export const WORD_SEP = '/';
 export const LETTER_SEP = '|';
@@ -8,7 +8,7 @@ export const DAH = '-';
 
 export type Tone = typeof WORD_SEP | typeof LETTER_SEP | typeof TONE_SEP | typeof DIT | typeof DAH;
 
-export type ToneSeq = readonly Tone[];
+export type ToneSeq = NEA.ReadonlyNonEmptyArray<Tone>;
 
 const _CHAR_LOOKUP = {
     'A': '.-',
@@ -89,8 +89,8 @@ const _PROSIGN_LOOKUP = {
 };
 
 const _reformatLookup = (lookup: Record<string, string>) => Object.entries(lookup).reduce(
-    (acc, [k, v]) => ({...acc, [k]: v.split('').join(TONE_SEP).split('') as Tone[] } ),
-    {} as Record<string, Tone[]>,
+    (acc, [k, v]) => ({...acc, [k]: v.split('').join(TONE_SEP).split('') as unknown as ToneSeq } ),
+    {} as Record<string, ToneSeq>,
 )
 
 export const CHAR_LOOKUP = _reformatLookup(_CHAR_LOOKUP);

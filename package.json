@@ -24,6 +24,7 @@
     "parser-ts": "^0.7.0",
     "react": "18.2.0",
     "react-native": "0.71.8",
+    "ts-pattern": "^4.3.0",
     "typescript": "^4.9.4",
     "wavefile": "^11.0.0",
     "xstate": "^4.37.2"
@@ -39,7 +40,9 @@
   "private": true,
   "jest": {
     "preset": "jest-expo",
-    "setupFilesAfterEnv": ["@relmify/jest-fp-ts"],
+    "setupFilesAfterEnv": [
+      "@relmify/jest-fp-ts"
+    ],
     "collectCoverage": true,
     "collectCoverageFrom": [
       "**/*.{ts,tsx}",
