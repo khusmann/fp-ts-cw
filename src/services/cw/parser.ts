@@ -1,107 +1,90 @@
-// io-ts
-import * as t from 'io-ts';
-
 // fp-ts
 import * as S from 'fp-ts/string';
 import * as E from 'fp-ts/Either';
 import * as O from 'fp-ts/Option';
 import * as A from 'fp-ts/ReadonlyArray';
+import * as NEA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as R from 'fp-ts/ReadonlyRecord';
 import * as M from 'fp-ts/ReadonlyMap';
 import { pipe } from 'fp-ts/function';
 
+import { Semigroup } from 'fp-ts/Semigroup';
+
+import { match, P } from 'ts-pattern';
+
 // parser-ts
-import { parser, char , string } from 'parser-ts';
-import { run } from 'parser-ts/code-frame'
+import { parser, char, stream, string } from 'parser-ts';
 
-// local
-import { CW_SYMBOLS, CwSymbolInfo } from './constants';
+import { CHAR_LOOKUP, PROSIGN_LOOKUP, LETTER_SEP, WORD_SEP, TONE_SEP, DIT, DAH } from './constants';
 
-const prosignParser = string.fold([
-    parser.succeed('<'),
-    pipe(
-        char.many1(char.upper),
-        parser.between(char.char("<"), char.char(">")),
-    ),
-    parser.succeed('>'),
-]);
+import type { ToneSeq, Tone } from './constants';
 
-const messageTokenizer = pipe(
-    parser.either(prosignParser, parser.item<string>),
-    parser.many1,
-)
-
-export const DitDahChar = t.keyof({
-    '.': null,
-    '-': null,
-    ' ': null,
-    '/': null,
+const joinToneSeqSemi = (sep: Tone): Semigroup<ToneSeq>=> ({
+  concat: (x, y) => pipe(
+    x,
+    NEA.concat([sep]),
+    NEA.concat(y),
+  )
 })
 
-export const DitDahSeq = t.array(DitDahChar);
+const lookupProsign = (s: string): O.Option<ToneSeq> => pipe(
+    PROSIGN_LOOKUP,
+    R.lookup(s),
+);
 
-type DitDahChar = t.TypeOf<typeof DitDahChar>
-type DitDahSeq = t.TypeOf<typeof DitDahSeq>;
+const lookupSymbol = (s: string): O.Option<ToneSeq> => pipe(
+    CHAR_LOOKUP,
+    R.lookup(s),
+);
 
-export const CwSymbol = t.keyof(CW_SYMBOLS);
-
-export const CwSymbolSeq = t.array(CwSymbol);
-
-type CwSymbol = t.TypeOf<typeof CwSymbol>;
-type CwSymbolSeq = t.TypeOf<typeof CwSymbolSeq>;
-
-const STR_TO_CW_SYMBOL = pipe(
-    CW_SYMBOLS,
-    R.foldMapWithIndex(S.Ord)(A.getMonoid<[string, CwSymbol]>())(
-        (k, v) => pipe(
-            v.str,
-            A.map((s) => ([s, k as CwSymbol])),
+const prosignParser = pipe(
+    parser.between(char.char("<"), char.char(">"))(char.many1(char.upper)),
+    parser.chain((s) => pipe(
+        lookupProsign(`<${s}>`),
+        O.fold(
+            () => parser.fail<string>(),
+            (cw) => parser.succeed(cw),
         ),
+    )),
+);
+
+const charParser = pipe(
+    parser.item<string>(),
+    parser.chain((s) => pipe(
+        lookupSymbol(s.toUpperCase()),
+        O.fold(
+            () => parser.fail<string>(),
+            (cw) => parser.succeed(cw),
+        )
+    )),
+);
+
+const wordParser = pipe(
+    parser.many1(charParser),
+    parser.map(
+        NEA.foldMap(joinToneSeqSemi(LETTER_SEP))((s) => s),
     ),
-    R.fromEntries,
 );
 
-const CW_SYMBOL_MAP = new Map(Object.entries(CW_SYMBOLS)) as ReadonlyMap<CwSymbol, CwSymbolInfo>;
-
-export const ditDahFromCwSymbol = (sym: CwSymbol) => pipe(
-    CW_SYMBOL_MAP,
-    M.lookup(S.Eq)(sym),
-    O.map((symInfo) => symInfo.cw.split('') as DitDahSeq),
-    O.getOrElse(() => [] as DitDahSeq),
+const messageParser = pipe(
+    parser.sepBy1(parser.many1(char.char(' ')), parser.either(prosignParser, () => wordParser)),
+    parser.map(NEA.foldMap(joinToneSeqSemi(WORD_SEP))((s) => s)),
 );
 
-export const ditDahSeqFromCwSymbolSeq = (symSeq: CwSymbolSeq) => pipe(
-    symSeq,
-    A.flatMap(ditDahFromCwSymbol),
+export const parseMessage = (s: string) => pipe(
+    stream.stream(s.split('')),
+    messageParser,
 );
 
-export const parseDitDahString = (input: string) => pipe(
-    input,
-    S.split(''),
-    DitDahSeq.decode,
-);
-
-export const parseCwString = (input: string) => pipe(
-    input,
-    S.split(''),
-    CwSymbolSeq.decode,
-);
-
-export const parseMessageToken = (input: string) => pipe(
-    STR_TO_CW_SYMBOL,
-    R.lookup(input),
-    O.fold(
-        () => t.failure(input, [], `Could not find symbol for "${input}"`),
-        t.success<CwSymbol>,
-    )
+export const stringFromToneSeq = (ts: ToneSeq) => pipe(
+    ts,
+    A.map((t) => (
+        match(t)
+        .with(LETTER_SEP, () => ' ')
+        .with(WORD_SEP, () => ' / ')
+        .with(TONE_SEP, () => '')
+        .with(P.union(DIT, DAH), (t) => t)
+        .exhaustive()
+    )),
+    A.reduce('', (acc, t) => acc + t),
 )
-
-export const parseMessage = (input: string) => pipe(
-    run(messageTokenizer, input.toUpperCase()),
-    E.fold(
-        (strErr) => t.failure(input, [], strErr),
-        t.success<readonly string[]>,
-    ),
-    E.chain(E.traverseArray(parseMessageToken)),
-    E.chain(CwSymbolSeq.decode),
-);
