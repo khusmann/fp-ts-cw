@@ -25,24 +25,38 @@ type Pulse = {
 
 type TimingSeq = NEA.ReadonlyNonEmptyArray<Pulse>;
 
+type AudioSettings = {
+    readonly sampleRate: number;
+    readonly bitRate: number;
+    readonly padTime: number;
+}
+
 type CwSettings = {
+    readonly freq: number;
     readonly wpm: number;
     readonly farnsworth: number;
     readonly ews: number;
 };
 
-const ditTime = (wpm: number) => 1.2 / wpm;
-const dahTime = (wpm: number) => 3 * ditTime(wpm);
-const fditTime = (wpm: number, farnsworth: number) => (60 - farnsworth * 31 * ditTime(wpm)) / (farnsworth * (12+7));
-const letterSpaceTime = (wpm: number, farnsworth: number) => farnsworth ? 3*fditTime(wpm, farnsworth): 3*ditTime(wpm);
-const wordSpaceTime = (wpm: number, farnsworth: number, ews: number) => 7 * (ews + 1) * (farnsworth ? fditTime(wpm, farnsworth): ditTime(wpm));
+const AUDIO_SETTINGS: AudioSettings = {
+    sampleRate: 8000,
+    bitRate: 16,
+    padTime: 0.05,
+}
 
-const pulseFromTone = (t: Tone): RD.Reader<CwSettings, Pulse> => (settings: CwSettings) => match(t)
-    .with(DIT, () => ({ tone: DIT, duration: ditTime(settings.wpm) } as const))
-    .with(DAH, () => ({ tone: DAH, duration: dahTime(settings.wpm) } as const))
-    .with(LETTER_SEP, () => ({ tone: LETTER_SEP, duration: letterSpaceTime(settings.wpm, settings.farnsworth) } as const))
-    .with(WORD_SEP, () => ({ tone: WORD_SEP, duration: wordSpaceTime(settings.wpm, settings.farnsworth, settings.ews) } as const))
-    .with(TONE_SEP, () => ({ tone: TONE_SEP, duration: ditTime(settings.wpm) } as const))
+const ditTime = (s: CwSettings) => 1.2 / s.wpm;
+const dahTime = (s: CwSettings) => 3 * ditTime(s);
+const fditTime = (s: CwSettings) => (60 - s.farnsworth * 31 * ditTime(s)) / (s.farnsworth * (12+7));
+const letterSpaceTime = (s: CwSettings) => s.farnsworth ? 3*fditTime(s): 3*ditTime(s);
+const wordSpaceTime = (s: CwSettings) => 7 * (s.ews + 1) * (s.farnsworth ? fditTime(s): ditTime(s));
+const rampTime = (s: CwSettings) => 1 / s.freq * 2; // Two period ramp
+
+const pulseFromTone = (t: Tone): RD.Reader<CwSettings, Pulse> => (s: CwSettings) => match(t)
+    .with(DIT, () => ({ tone: DIT, duration: ditTime(s) } as const))
+    .with(DAH, () => ({ tone: DAH, duration: dahTime(s) } as const))
+    .with(LETTER_SEP, () => ({ tone: LETTER_SEP, duration: letterSpaceTime(s) } as const))
+    .with(WORD_SEP, () => ({ tone: WORD_SEP, duration: wordSpaceTime(s) } as const))
+    .with(TONE_SEP, () => ({ tone: TONE_SEP, duration: ditTime(s) } as const))
     .exhaustive()
 
 export const timingSeqFromToneSeq = (ts: ToneSeq): RD.Reader<CwSettings, TimingSeq> => pipe(

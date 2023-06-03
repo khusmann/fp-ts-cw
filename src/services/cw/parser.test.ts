@@ -22,7 +22,7 @@ describe("ToneSeq", () => {
     });
     it("debug", () => {
         const result = pipe(
-            { wpm: 20, farnsworth: 10, ews: 0 },
+            { freq: 700, wpm: 20, farnsworth: 10, ews: 0 },
             pipe(
                 run(messageParser, "HELLo, + world 73 <BT>  \n"),
                 E.map((pr) => timingSeqFromToneSeq(pr)),
