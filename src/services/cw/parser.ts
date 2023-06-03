@@ -29,6 +29,7 @@ type AudioSettings = {
     readonly sampleRate: number;
     readonly bitRate: number;
     readonly padTime: number;
+    readonly rampTime: number;
 }
 
 type CwSettings = {
@@ -42,6 +43,7 @@ const AUDIO_SETTINGS: AudioSettings = {
     sampleRate: 8000,
     bitRate: 16,
     padTime: 0.05,
+    rampTime: 0.005, // Recommended by ARRL. See Section 2.202 of FCC rules and CCIR Radio regulations.
 }
 
 const ditTime = (s: CwSettings) => 1.2 / s.wpm;
@@ -49,7 +51,6 @@ const dahTime = (s: CwSettings) => 3 * ditTime(s);
 const fditTime = (s: CwSettings) => (60 - s.farnsworth * 31 * ditTime(s)) / (s.farnsworth * (12+7));
 const letterSpaceTime = (s: CwSettings) => s.farnsworth ? 3*fditTime(s): 3*ditTime(s);
 const wordSpaceTime = (s: CwSettings) => 7 * (s.ews + 1) * (s.farnsworth ? fditTime(s): ditTime(s));
-const rampTime = (s: CwSettings) => 1 / s.freq * 2; // Two period ramp
 
 const pulseFromTone = (t: Tone): RD.Reader<CwSettings, Pulse> => (s: CwSettings) => match(t)
     .with(DIT, () => ({ tone: DIT, duration: ditTime(s) } as const))
