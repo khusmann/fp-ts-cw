@@ -1,4 +1,4 @@
-import { parseMessage, stringFromToneSeq, messageParser, timingSeqFromToneSeq } from './parser';
+import { parseMessage, stringFromPulseSeq, messageParser, pulseTimingFromPulseSeq } from './parser';
 
 import { run } from 'parser-ts/code-frame';
 
@@ -10,7 +10,7 @@ describe("ToneSeq", () => {
     it("decodes valid text with prosigns", () => {
         const result = pipe(
             run(messageParser, "HELLo, + world 73 <BT>  \n"),
-            E.map((pr) => stringFromToneSeq(pr)),
+            E.map((pr) => stringFromPulseSeq(pr)),
         )
         expect(result).toEqualRight(".... . .-.. .-.. --- --..-- / .-.-. / .-- --- .-. .-.. -.. / --... ...-- / -...- / .-.-");
     })
@@ -25,7 +25,7 @@ describe("ToneSeq", () => {
             { freq: 700, wpm: 20, farnsworth: 10, ews: 0 },
             pipe(
                 run(messageParser, "HELLo, + world 73 <BT>  \n"),
-                E.map((pr) => timingSeqFromToneSeq(pr)),
+                E.map((pr) => pulseTimingFromPulseSeq(pr)),
                 E.sequence(R.Applicative)
             )
         )
