@@ -1,4 +1,4 @@
-import { parseMessage, stringFromPulseSeq, messageParser, pulseTimingFromPulseSeq } from './parser';
+import { messageParser, stringifyPulses, stringifyTokens, stringifyCode } from './parser2';
 
 import { run } from 'parser-ts/code-frame';
 
@@ -6,6 +6,42 @@ import { pipe } from 'fp-ts/function';
 import * as E from 'fp-ts/Either';
 import * as R from 'fp-ts/Reader';
 
+describe("ToneSeq", () => {
+    it("decodes valid text with prosigns", () => {
+        const result = run(messageParser, "HELLo, + world  73 <BT>  <BK>\n")
+
+        pipe(
+            result,
+            E.map((pr) => stringifyTokens(pr)),
+            E.fold(
+                (e) => e,
+                (a) => a,
+            ),
+            console.log,
+        );
+        pipe(
+            result,
+            E.map((pr) => stringifyCode(pr)),
+            E.fold(
+                (e) => e,
+                (a) => a,
+            ),
+            console.log,
+        );
+        pipe(
+            result,
+            E.map((pr) => stringifyPulses(pr)),
+            E.fold(
+                (e) => e,
+                (a) => a,
+            ),
+            console.log,
+        );
+    })
+});
+
+
+/*
 describe("ToneSeq", () => {
     it("decodes valid text with prosigns", () => {
         const result = pipe(
@@ -32,3 +68,4 @@ describe("ToneSeq", () => {
         console.log(result);
     });
 });
+*/
