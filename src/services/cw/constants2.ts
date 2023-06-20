@@ -9,6 +9,8 @@ import * as RR from 'fp-ts/ReadonlyRecord';
 import * as R from 'fp-ts/Reader';
 import { pipe, flow } from 'fp-ts/function';
 
+import { match, P } from 'ts-pattern';
+
 export const DOT = { _tag: 'dot' } as const;
 
 export type Dot = typeof DOT;
@@ -141,14 +143,79 @@ const _pulsesFromCode = flow(
     S.split(''),
     RNA.map((c) => c === '.' ? DOT : DASH),
     RNA.intersperse<Dot | Dash | ToneSpace>(TONE_SPACE),
-)
+);
 
 const _tokenFromCode = (str: string, code: string): Token => (
     str.length === 1 ? Character(str, _pulsesFromCode(code)) : Prosign(str, _pulsesFromCode(code))
-)
+);
 
 export const CW_TOKEN_LOOKUP = pipe(
     CW_SYMBOLS,
     RNA.map(([str, code]) => [str, _tokenFromCode(str, code)] as const),
     RR.fromEntries,
+);
+
+export const CW_CODE_LOOKUP = pipe(
+    CW_SYMBOLS,
+    RNA.map(([str, code]) => [code, _tokenFromCode(str, code)] as const),
+    RR.fromEntries,
+);
+
+export const stringifyTokens = (m: Message | Prosign | Character | Word | WordSpace | LetterSpace | Prosign) => (
+    match(m)
+    .with(P.union(
+        { _tag: 'message' },
+        { _tag: 'word' },
+    ), ({ children }) => pipe(
+        children,
+        RNA.map(stringifyTokens),
+        RNA.concatAll(S.Semigroup),
+    ))
+    .with({ _tag: 'prosign' }, ({ str }) => `<${str}>`)
+    .with({ _tag: 'character' }, ({ str }) => str)
+    .with({ _tag: 'wordspace' }, () => ' ')
+    .with({ _tag: 'letterspace' }, () => '')
+    .exhaustive()
 )
+
+export const stringifyCode = (m: Message | Prosign | Character | Word | WordSpace | LetterSpace | Prosign | Dot | Dash | ToneSpace) => (
+    match(m)
+    .with(P.union(
+        { _tag: 'message' },
+        { _tag: 'word' },
+        { _tag: 'prosign' },
+        { _tag: 'character' },
+    ), ({ children }) => pipe(
+        children,
+        RNA.map(stringifyCode),
+        RNA.concatAll(S.Semigroup),
+    ))
+    .with({ _tag: 'wordspace' }, () => ' / ')
+    .with({ _tag: 'letterspace' }, () => ' ')
+    .with({ _tag: 'dot' }, () => '.')
+    .with({ _tag: 'dash' }, () => '-')
+    .with({ _tag: 'tonespace' }, () => '')
+    .exhaustive()
+);
+
+export const stringifyPulses = (m: Message | Prosign | Character | Word | WordSpace | LetterSpace | Prosign | Dot | Dash | ToneSpace) => (
+    match(m)
+    .with(P.union(
+        { _tag: 'message' },
+        { _tag: 'word' },
+        { _tag: 'prosign' },
+        { _tag: 'character' },
+    ), ({ children }) => pipe(
+        children,
+        RNA.map(stringifyPulses),
+        RNA.concatAll(S.Semigroup),
+    ))
+    .with({ _tag: 'wordspace' }, () => ' ')
+    .with({ _tag: 'letterspace' }, () => '/')
+    .with({ _tag: 'dot' }, () => '.')
+    .with({ _tag: 'dash' }, () => '-')
+    .with({ _tag: 'tonespace' }, () => '|')
+    .exhaustive()
+);
+
+
