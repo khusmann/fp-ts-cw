@@ -1,14 +1,13 @@
-import * as RR from 'fp-ts/ReadonlyRecord';
 import { pipe } from 'fp-ts/function';
 import { parser as P, char as C, string as S } from 'parser-ts';
 
 import {
-  CW_TOKEN_LOOKUP,
+  lookupTokenCode,
+  lookupTokenText,
   WORD_SPACE,
   word,
   message,
   TOKEN_SPACE,
-  CW_CODE_LOOKUP,
 } from './constants2';
 import type { Token } from './constants2';
 import { parserFromOption, PeitherW, RNAintersperseW } from './util';
@@ -29,13 +28,13 @@ export namespace TextParser {
   const parseProsign = (prosignStart: string, prosignEnd: string) =>
     pipe(
       P.between(C.char(prosignStart), C.char(prosignEnd))(C.many1(C.upper)),
-      P.map((s) => RR.lookup(s)(CW_TOKEN_LOOKUP)),
+      P.map(lookupTokenText),
       P.chain(parserFromOption())
     );
 
   const parseCharacter = pipe(
     P.item<string>(),
-    P.map((s) => RR.lookup(s.toUpperCase())(CW_TOKEN_LOOKUP)),
+    P.map(lookupTokenText),
     P.chain(parserFromOption())
   );
 
@@ -95,7 +94,7 @@ export namespace CodeParser {
   const parseToken = (dot: string, dash: string) =>
     pipe(
       S.many1(P.either(C.char(dot), () => C.char(dash))),
-      P.map((s) => RR.lookup(s)(CW_CODE_LOOKUP)),
+      P.map(lookupTokenCode(dot, dash)),
       P.chain(parserFromOption())
     );
 

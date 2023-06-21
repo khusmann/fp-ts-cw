@@ -7,7 +7,7 @@ import { match, P } from 'ts-pattern';
 export type Dot = { readonly _tag: 'dot' };
 export type Dash = { readonly _tag: 'dash' };
 export type ToneSpace = { readonly _tag: 'tonespace' };
-export type TokenSpace = { readonly _tag: 'letterspace' };
+export type TokenSpace = { readonly _tag: 'tokenspace' };
 export type WordSpace = { readonly _tag: 'wordspace' };
 
 export type Code = Dot | Dash | ToneSpace;
@@ -39,7 +39,7 @@ export const DOT: Dot = { _tag: 'dot' };
 export const DASH: Dash = { _tag: 'dash' };
 export const TONE_SPACE: ToneSpace = { _tag: 'tonespace' };
 export const WORD_SPACE: WordSpace = { _tag: 'wordspace' };
-export const TOKEN_SPACE: TokenSpace = { _tag: 'letterspace' };
+export const TOKEN_SPACE: TokenSpace = { _tag: 'tokenspace' };
 
 export const character = (
   str: string,
@@ -145,26 +145,31 @@ const CW_SYMBOLS = [
   ['SOS', '...---...'],
 ] as const;
 
-const _pulsesFromCode = flow(
+const pulsesFromCode = flow(
   S.split(''),
   RNA.map((c) => (c === '.' ? DOT : DASH)),
   RNA.intersperse<Dot | Dash | ToneSpace>(TONE_SPACE)
 );
 
-const _tokenFromCode = (str: string, code: string): Token =>
-  str.length === 1 ? character(str, _pulsesFromCode(code)) : prosign(str, _pulsesFromCode(code));
+const tokenFromCode = (str: string, code: string): Token =>
+  str.length === 1 ? character(str, pulsesFromCode(code)) : prosign(str, pulsesFromCode(code));
 
-export const CW_TOKEN_LOOKUP = pipe(
+const CW_TOKEN_LOOKUP = pipe(
   CW_SYMBOLS,
-  RNA.map(([str, code]: (typeof CW_SYMBOLS)[number]) => [str, _tokenFromCode(str, code)] as const),
+  RNA.map(([str, code]: (typeof CW_SYMBOLS)[number]) => [str, tokenFromCode(str, code)] as const),
   RR.fromEntries
 );
 
-export const CW_CODE_LOOKUP = pipe(
+const CW_CODE_LOOKUP = pipe(
   CW_SYMBOLS,
-  RNA.map(([str, code]: (typeof CW_SYMBOLS)[number]) => [code, _tokenFromCode(str, code)] as const),
+  RNA.map(([str, code]: (typeof CW_SYMBOLS)[number]) => [code, tokenFromCode(str, code)] as const),
   RR.fromEntries
 );
+
+export const lookupTokenText = (str: string) => RR.lookup(str.toUpperCase())(CW_TOKEN_LOOKUP);
+
+export const lookupTokenCode = (dot: string, dash: string) => (str: string) =>
+  pipe(CW_CODE_LOOKUP, RR.lookup(pipe(str, S.replace(dot, '.'), S.replace(dash, '-'))));
 
 export const stringifyTokens = (m: Message | Word | WordSpace | TokenSpace | Token): string =>
   match(m)
@@ -174,7 +179,7 @@ export const stringifyTokens = (m: Message | Word | WordSpace | TokenSpace | Tok
     .with({ _tag: 'prosign' }, ({ str }) => `<${str}>`)
     .with({ _tag: 'character' }, ({ str }) => str)
     .with({ _tag: 'wordspace' }, () => ' ')
-    .with({ _tag: 'letterspace' }, () => '')
+    .with({ _tag: 'tokenspace' }, () => '')
     .exhaustive();
 
 export const stringifyCode = (
@@ -186,7 +191,7 @@ export const stringifyCode = (
       ({ children }) => pipe(children, RNA.map(stringifyCode), RNA.concatAll(S.Semigroup))
     )
     .with({ _tag: 'wordspace' }, () => ' / ')
-    .with({ _tag: 'letterspace' }, () => ' ')
+    .with({ _tag: 'tokenspace' }, () => ' ')
     .with({ _tag: 'dot' }, () => '.')
     .with({ _tag: 'dash' }, () => '-')
     .with({ _tag: 'tonespace' }, () => '')
@@ -201,7 +206,7 @@ export const stringifyPulses = (
       ({ children }) => pipe(children, RNA.map(stringifyPulses), RNA.concatAll(S.Semigroup))
     )
     .with({ _tag: 'wordspace' }, () => ' ')
-    .with({ _tag: 'letterspace' }, () => '/')
+    .with({ _tag: 'tokenspace' }, () => '/')
     .with({ _tag: 'dot' }, () => '.')
     .with({ _tag: 'dash' }, () => '-')
     .with({ _tag: 'tonespace' }, () => '|')
