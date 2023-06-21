@@ -1,5 +1,6 @@
 import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as RR from 'fp-ts/ReadonlyRecord';
+import * as Se from 'fp-ts/Semigroup';
 import { pipe, flow } from 'fp-ts/function';
 import * as S from 'fp-ts/string';
 import { match, P } from 'ts-pattern';
@@ -43,19 +44,13 @@ export const TONE_SPACE: ToneSpace = { _tag: 'tonespace' };
 export const WORD_SPACE: WordSpace = { _tag: 'wordspace' };
 export const TOKEN_SPACE: TokenSpace = { _tag: 'tokenspace' };
 
-export const character = (
-  str: string,
-  children: RNA.ReadonlyNonEmptyArray<Dot | Dash | ToneSpace>
-): Character => ({
+export const character = (str: string, children: RNA.ReadonlyNonEmptyArray<Dot | Dash | ToneSpace>): Character => ({
   _tag: 'character',
   str,
   children,
 });
 
-export const prosign = (
-  str: string,
-  children: RNA.ReadonlyNonEmptyArray<Dot | Dash | ToneSpace>
-): Prosign => ({
+export const prosign = (str: string, children: RNA.ReadonlyNonEmptyArray<Dot | Dash | ToneSpace>): Prosign => ({
   _tag: 'prosign',
   str,
   children,
@@ -97,43 +92,82 @@ export const lookupTokenFromText = (str: string) => RR.lookup(str.toUpperCase())
 export const lookupTokenFromCode = (dot: string, dash: string) => (str: string) =>
   pipe(CW_CODE_LOOKUP, RR.lookup(pipe(str, S.replace(dot, '.'), S.replace(dash, '-'))));
 
-export const stringifyTokens = (m: Message | Word | WordSpace | TokenSpace | Token): string =>
-  match(m)
-    .with(P.union({ _tag: 'message' }, { _tag: 'word' }), ({ children }) =>
-      pipe(children, RNA.map(stringifyTokens), RNA.concatAll(S.Semigroup))
-    )
-    .with({ _tag: 'prosign' }, ({ str }) => `<${str}>`)
-    .with({ _tag: 'character' }, ({ str }) => str)
-    .with({ _tag: 'wordspace' }, () => ' ')
-    .with({ _tag: 'tokenspace' }, () => '')
-    .exhaustive();
+export type TransformTokenSettings<T> = {
+  readonly prosign: (p: Prosign) => T;
+  readonly character: (c: Character) => T;
+  readonly wordspace: T;
+  readonly tokenspace: T;
+  readonly semigroup: Se.Semigroup<T>;
+};
 
-export const stringifyCode = (
-  m: Message | Token | Word | WordSpace | TokenSpace | Dot | Dash | ToneSpace
-): string =>
-  match(m)
-    .with(
-      P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'prosign' }, { _tag: 'character' }),
-      ({ children }) => pipe(children, RNA.map(stringifyCode), RNA.concatAll(S.Semigroup))
-    )
-    .with({ _tag: 'wordspace' }, () => ' / ')
-    .with({ _tag: 'tokenspace' }, () => ' ')
-    .with({ _tag: 'dot' }, () => '.')
-    .with({ _tag: 'dash' }, () => '-')
-    .with({ _tag: 'tonespace' }, () => '')
-    .exhaustive();
+export type TransformCodeSettings<T> = {
+  readonly dot: T;
+  readonly dash: T;
+  readonly tokenSpace: T;
+  readonly toneSpace: T;
+  readonly wordSpace: T;
+  readonly semigroup: Se.Semigroup<T>;
+};
 
-export const stringifyPulses = (
-  m: Message | Word | WordSpace | TokenSpace | Token | Dot | Dash | ToneSpace
-): string =>
-  match(m)
-    .with(
-      P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'prosign' }, { _tag: 'character' }),
-      ({ children }) => pipe(children, RNA.map(stringifyPulses), RNA.concatAll(S.Semigroup))
-    )
-    .with({ _tag: 'wordspace' }, () => ' ')
-    .with({ _tag: 'tokenspace' }, () => '/')
-    .with({ _tag: 'dot' }, () => '.')
-    .with({ _tag: 'dash' }, () => '-')
-    .with({ _tag: 'tonespace' }, () => '|')
-    .exhaustive();
+export const transformCodeLevel =
+  <T>(config: TransformCodeSettings<T>) =>
+  (m: Message | Token | Word | WordSpace | TokenSpace | Dot | Dash | ToneSpace): T =>
+    match(m)
+      .with(
+        P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'prosign' }, { _tag: 'character' }),
+        ({ children }) => pipe(children, RNA.map(transformCodeLevel(config)), RNA.concatAll(config.semigroup))
+      )
+      .with({ _tag: 'wordspace' }, () => config.wordSpace)
+      .with({ _tag: 'tokenspace' }, () => config.tokenSpace)
+      .with({ _tag: 'dot' }, () => config.dot)
+      .with({ _tag: 'dash' }, () => config.dash)
+      .with({ _tag: 'tonespace' }, () => config.toneSpace)
+      .exhaustive();
+
+export const transformTokenLevel =
+  <T>(config: TransformTokenSettings<T>) =>
+  (m: Message | Word | WordSpace | TokenSpace | Token): T =>
+    match(m)
+      .with(P.union({ _tag: 'message' }, { _tag: 'word' }), ({ children }) =>
+        pipe(children, RNA.map(transformTokenLevel(config)), RNA.concatAll(config.semigroup))
+      )
+      .with({ _tag: 'prosign' }, config.prosign)
+      .with({ _tag: 'character' }, config.character)
+      .with({ _tag: 'wordspace' }, () => config.wordspace)
+      .with({ _tag: 'tokenspace' }, () => config.tokenspace)
+      .exhaustive();
+
+export const stringifyTokens = transformTokenLevel({
+  prosign: ({ str }) => `<${str}>`,
+  character: ({ str }) => str,
+  wordspace: ' ',
+  tokenspace: '',
+  semigroup: S.Semigroup,
+});
+
+export const stringifyCode = transformCodeLevel({
+  dot: '.',
+  dash: '-',
+  tokenSpace: ' ',
+  toneSpace: '',
+  wordSpace: ' / ',
+  semigroup: S.Semigroup,
+});
+
+export const stringifyPulses = transformCodeLevel({
+  dot: '.',
+  dash: '-',
+  tokenSpace: '/',
+  toneSpace: '|',
+  wordSpace: ' ',
+  semigroup: S.Semigroup,
+});
+
+export const stringifyPulsesArr = transformCodeLevel({
+  dot: ['.'],
+  dash: ['-'],
+  tokenSpace: ['/'],
+  toneSpace: ['|'],
+  wordSpace: [' '],
+  semigroup: RNA.getSemigroup<string>(),
+});

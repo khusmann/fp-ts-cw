@@ -23,11 +23,7 @@ const parseProsign = (prosignStart: string, prosignEnd: string) =>
     P.chain(parserFromOption())
   );
 
-const parseCharacter = pipe(
-  P.item<string>(),
-  P.map(ast.lookupTokenFromText),
-  P.chain(parserFromOption())
-);
+const parseCharacter = pipe(P.item<string>(), P.map(ast.lookupTokenFromText), P.chain(parserFromOption()));
 
 const parseWordSpace = (wordSpace: string) =>
   pipe(
@@ -35,10 +31,7 @@ const parseWordSpace = (wordSpace: string) =>
     P.map(() => ast.WORD_SPACE)
   );
 
-const parseWord = (
-  prosignParser: P.Parser<string, ast.Token>,
-  characterParser: P.Parser<string, ast.Token>
-) =>
+const parseWord = (prosignParser: P.Parser<string, ast.Token>, characterParser: P.Parser<string, ast.Token>) =>
   pipe(
     P.many1(P.either<string, ast.Token>(prosignParser, () => characterParser)),
     P.map(RNAintersperseW(ast.TOKEN_SPACE)),
@@ -49,9 +42,8 @@ export const parseMessage = (settings = DEFAULT_SETTINGS) =>
   P.expected(
     pipe(
       P.many1Till(
-        PeitherW(
-          parseWord(parseProsign(settings.prosignStart, settings.prosignEnd), parseCharacter),
-          () => parseWordSpace(settings.wordSpace)
+        PeitherW(parseWord(parseProsign(settings.prosignStart, settings.prosignEnd), parseCharacter), () =>
+          parseWordSpace(settings.wordSpace)
         ),
         P.eof()
       ),
