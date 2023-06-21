@@ -3,11 +3,11 @@ import { pipe } from 'fp-ts/function';
 import { run } from 'parser-ts/code-frame';
 
 import { stringifyPulses, stringifyTokens, stringifyCode } from './constants2';
-import { parseMessageText, parseMessageCode } from './parser2';
+import { TextParser, CodeParser } from './parser2';
 
 describe('ToneSeq', () => {
   it('decodes valid text with prosigns', () => {
-    const result = run(parseMessageText(), 'HELLo, + world  73 <BT>  <BK>\n');
+    const result = run(TextParser.parseMessage(), 'HELLo, + world  73 <BT>  <BK>\n');
 
     pipe(
       result,
@@ -39,7 +39,7 @@ describe('ToneSeq', () => {
   });
   it('decodes valid text with prosigns', () => {
     const result = run(
-      parseMessageCode(),
+      CodeParser.parseMessage(),
       '.... . .-.. .-.. --- --..-- / .-.-. / .-- --- .-. .-.. -.. // --... ...-- / -...-//-...-.- .-.-'
     );
 
