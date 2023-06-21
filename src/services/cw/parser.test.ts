@@ -39,7 +39,7 @@ describe('ToneSeq', () => {
   });
   it('decodes valid text with prosigns', () => {
     const result = run(
-      parseMessageCode,
+      parseMessageCode(),
       '.... . .-.. .-.. --- --..-- / .-.-. / .-- --- .-. .-.. -.. // --... ...-- / -...-//-...-.- .-.-'
     );
 

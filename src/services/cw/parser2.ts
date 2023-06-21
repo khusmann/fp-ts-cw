@@ -1,8 +1,6 @@
-import * as O from 'fp-ts/Option';
-import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as RR from 'fp-ts/ReadonlyRecord';
 import { pipe } from 'fp-ts/function';
-import { parser, char, string } from 'parser-ts';
+import { parser as P, char as C, string as S } from 'parser-ts';
 
 import {
   CW_TOKEN_LOOKUP,
@@ -12,11 +10,19 @@ import {
   TOKEN_SPACE,
   CW_CODE_LOOKUP,
 } from './constants2';
-import type { Word, WordSpace, TokenSpace, Token } from './constants2';
+import type { Token } from './constants2';
+import { parserFromOption, PeitherW, RNAintersperseW } from './util';
 
 type ParseTextSettings = {
   readonly prosignStart: string;
   readonly prosignEnd: string;
+  readonly wordSpace: string;
+};
+
+type ParseCodeSettings = {
+  readonly dot: string;
+  readonly dash: string;
+  readonly tokenSpace: string;
   readonly wordSpace: string;
 };
 
@@ -26,84 +32,92 @@ export const DEFAULT_PARSE_TEXT_SETTINGS: ParseTextSettings = {
   wordSpace: ' ',
 };
 
-const parserFromOption = <I>(): (<O>(o: O.Option<O>) => parser.Parser<I, O>) =>
-  O.fold(
-    () => parser.fail<I>(),
-    (o) => parser.succeed(o)
-  );
+export const DEFAULT_PARSE_CODE_SETTINGS: ParseCodeSettings = {
+  dot: '.',
+  dash: '-',
+  tokenSpace: ' ',
+  wordSpace: '/',
+};
 
 const parseProsignText = (prosignStart: string, prosignEnd: string) =>
   pipe(
-    parser.between(char.char(prosignStart), char.char(prosignEnd))(char.many1(char.upper)),
-    parser.map((s) => RR.lookup(s)(CW_TOKEN_LOOKUP)),
-    parser.chain(parserFromOption())
+    P.between(C.char(prosignStart), C.char(prosignEnd))(C.many1(C.upper)),
+    P.map((s) => RR.lookup(s)(CW_TOKEN_LOOKUP)),
+    P.chain(parserFromOption())
   );
 
 const parseCharacterText = pipe(
-  parser.item<string>(),
-  parser.map((s) => RR.lookup(s.toUpperCase())(CW_TOKEN_LOOKUP)),
-  parser.chain(parserFromOption())
+  P.item<string>(),
+  P.map((s) => RR.lookup(s.toUpperCase())(CW_TOKEN_LOOKUP)),
+  P.chain(parserFromOption())
 );
 
 const parseWordSpaceText = (wordSpace: string) =>
   pipe(
-    char.char(wordSpace),
-    parser.map(() => WORD_SPACE)
+    C.char(wordSpace),
+    P.map(() => WORD_SPACE)
   );
 
-const parseWordText = (prosignStart: string, prosignEnd: string) =>
+const parseWordText = (
+  prosignParser: P.Parser<string, Token>,
+  characterParser: P.Parser<string, Token>
+) =>
   pipe(
-    parser.many1(
-      parser.either<string, Token>(
-        parseProsignText(prosignStart, prosignEnd),
-        () => parseCharacterText
-      )
-    ),
-    parser.map(RNA.intersperse<Token | TokenSpace>(TOKEN_SPACE)),
-    parser.map(word)
+    P.many1(P.either<string, Token>(prosignParser, () => characterParser)),
+    P.map(RNAintersperseW(TOKEN_SPACE)),
+    P.map(word)
   );
 
 export const parseMessageText = (settings = DEFAULT_PARSE_TEXT_SETTINGS) =>
-  parser.expected(
+  P.expected(
     pipe(
-      parser.many1Till(
-        parser.either<string, Word | WordSpace>(
-          parseWordText(settings.prosignStart, settings.prosignEnd),
+      P.many1Till(
+        PeitherW(
+          parseWordText(
+            parseProsignText(settings.prosignStart, settings.prosignEnd),
+            parseCharacterText
+          ),
           () => parseWordSpaceText(settings.wordSpace)
         ),
-        parser.eof()
+        P.eof()
       ),
-      parser.map(message)
+      P.map(message)
     ),
     'valid character or prosign'
   );
 
-const parseWordSpaceCode = pipe(
-  char.char('/'),
-  parser.chain(() => parser.succeed(WORD_SPACE))
-);
-
-const parseTokenCode = pipe(
-  string.many1(parser.either(char.char('.'), () => char.char('-'))),
-  parser.map((s) => RR.lookup(s)(CW_CODE_LOOKUP)),
-  parser.chain(parserFromOption())
-);
-
-const parseWordCode = pipe(
-  parser.sepBy1(parser.many(char.space), parseTokenCode),
-  parser.map(RNA.intersperse<Token | TokenSpace>(TOKEN_SPACE)),
-  parser.map(word)
-);
-
-export const parseMessageCode = parser.expected(
+const parseWordSpaceCode = (wordSpace: string) =>
   pipe(
-    parser.many1Till(
-      parser.surroundedBy(parser.many(char.space))(
-        parser.either<string, Word | WordSpace>(parseWordCode, () => parseWordSpaceCode)
+    C.char(wordSpace),
+    P.chain(() => P.succeed(WORD_SPACE))
+  );
+
+const parseTokenCode = (dot: string, dash: string) =>
+  pipe(
+    S.many1(P.either(C.char('.'), () => C.char('-'))),
+    P.map((s) => RR.lookup(s)(CW_CODE_LOOKUP)),
+    P.chain(parserFromOption())
+  );
+
+const parseWordCode = (tokenCodeParser: P.Parser<string, Token>, tokenSpace: string) =>
+  pipe(
+    P.sepBy1(P.many(C.char(tokenSpace)), tokenCodeParser),
+    P.map(RNAintersperseW(TOKEN_SPACE)),
+    P.map(word)
+  );
+
+export const parseMessageCode = (config = DEFAULT_PARSE_CODE_SETTINGS) =>
+  P.expected(
+    pipe(
+      P.many1Till(
+        P.surroundedBy(P.many(C.space))(
+          PeitherW(parseWordCode(parseTokenCode(config.dot, config.dash), config.tokenSpace), () =>
+            parseWordSpaceCode(config.wordSpace)
+          )
+        ),
+        P.eof()
       ),
-      parser.eof()
+      P.map(message)
     ),
-    parser.map(message)
-  ),
-  'valid character or prosign'
-);
+    'valid character or prosign'
+  );
