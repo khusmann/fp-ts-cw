@@ -2,16 +2,17 @@ import * as E from 'fp-ts/Either';
 import { pipe } from 'fp-ts/function';
 import { run } from 'parser-ts/code-frame';
 
-import { stringifyPulses, stringifyTokens, stringifyCode } from './constants2';
-import { TextParser, CodeParser } from './parser2';
+import * as ast from './ast';
+import * as codeParser from './codeparser';
+import * as textParser from './textparser';
 
 describe('ToneSeq', () => {
   it('decodes valid text with prosigns', () => {
-    const result = run(TextParser.parseMessage(), 'HELLo, + world  73 <BT>  <BK>\n');
+    const result = run(textParser.parseMessage(), 'HELLo, + world  73 <BT>  <BK>\n');
 
     pipe(
       result,
-      E.map((pr) => stringifyTokens(pr)),
+      E.map((pr) => ast.stringifyTokens(pr)),
       E.fold(
         (e) => e,
         (a) => a
@@ -20,7 +21,7 @@ describe('ToneSeq', () => {
     );
     pipe(
       result,
-      E.map((pr) => stringifyCode(pr)),
+      E.map((pr) => ast.stringifyCode(pr)),
       E.fold(
         (e) => e,
         (a) => a
@@ -29,7 +30,7 @@ describe('ToneSeq', () => {
     );
     pipe(
       result,
-      E.map((pr) => stringifyPulses(pr)),
+      E.map((pr) => ast.stringifyPulses(pr)),
       E.fold(
         (e) => e,
         (a) => a
@@ -39,13 +40,13 @@ describe('ToneSeq', () => {
   });
   it('decodes valid text with prosigns', () => {
     const result = run(
-      CodeParser.parseMessage(),
+      codeParser.parseMessage(),
       '.... . .-.. .-.. --- --..-- / .-.-. / .-- --- .-. .-.. -.. // --... ...-- / -...-//-...-.- .-.-'
     );
 
     pipe(
       result,
-      E.map((pr) => stringifyTokens(pr)),
+      E.map((pr) => ast.stringifyTokens(pr)),
       E.fold(
         (e) => e,
         (a) => a
@@ -54,7 +55,7 @@ describe('ToneSeq', () => {
     );
     pipe(
       result,
-      E.map((pr) => stringifyCode(pr)),
+      E.map((pr) => ast.stringifyCode(pr)),
       E.fold(
         (e) => e,
         (a) => a
@@ -63,7 +64,7 @@ describe('ToneSeq', () => {
     );
     pipe(
       result,
-      E.map((pr) => stringifyPulses(pr)),
+      E.map((pr) => ast.stringifyPulses(pr)),
       E.fold(
         (e) => e,
         (a) => a

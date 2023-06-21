@@ -4,6 +4,8 @@ import { pipe, flow } from 'fp-ts/function';
 import * as S from 'fp-ts/string';
 import { match, P } from 'ts-pattern';
 
+import { CW_SYMBOLS } from './constants';
+
 export type Dot = { readonly _tag: 'dot' };
 export type Dash = { readonly _tag: 'dash' };
 export type ToneSpace = { readonly _tag: 'tonespace' };
@@ -69,82 +71,6 @@ export const message = (children: RNA.ReadonlyNonEmptyArray<Word | WordSpace>): 
   children,
 });
 
-const CW_SYMBOLS = [
-  ['A', '.-'],
-  ['B', '-...'],
-  ['C', '-.-.'],
-  ['D', '-..'],
-  ['E', '.'],
-  ['F', '..-.'],
-  ['G', '--.'],
-  ['H', '....'],
-  ['I', '..'],
-  ['J', '.---'],
-  ['K', '-.-'],
-  ['L', '.-..'],
-  ['M', '--'],
-  ['N', '-.'],
-  ['O', '---'],
-  ['P', '.--.'],
-  ['Q', '--.-'],
-  ['R', '.-.'],
-  ['S', '...'],
-  ['T', '-'],
-  ['U', '..-'],
-  ['V', '...-'],
-  ['W', '.--'],
-  ['X', '-..-'],
-  ['Y', '-.--'],
-  ['Z', '--..'],
-
-  ['0', '-----'],
-  ['1', '.----'],
-  ['2', '..---'],
-  ['3', '...--'],
-  ['4', '....-'],
-  ['5', '.....'],
-  ['6', '-....'],
-  ['7', '--...'],
-  ['8', '---..'],
-  ['9', '----.'],
-
-  ['.', '.-.-.-'],
-  [',', '--..--'],
-  ['?', '..--..'],
-  ["'", '.----.'],
-  ['\n', '.-.-'],
-  ['!', '-.-.--'],
-  ['/', '-..-.'],
-  ['(', '-.--.'],
-  [')', '-.--.-'],
-  ['&', '.-...'],
-  [':', '---...'],
-  [';', '-.-.-.'],
-  ['=', '-...-'],
-  ['+', '.-.-.'],
-  ['-', '-....-'],
-  ['_', '..--.-'],
-  ['"', '.-..-.'],
-  ['$', '...-..-'],
-  ['@', '.--.-.'],
-  ['#', '...-.-'],
-
-  ['AA', '.-.-'],
-  ['AR', '.-.-.'],
-  ['AS', '.-...'],
-  ['BT', '-...-'],
-  ['BK', '-...-.-'],
-  ['CL', '-.-..-..'],
-  ['CT', '-.-.-'],
-  ['DO', '-..---'],
-  ['KA', '-.-.-'],
-  ['KN', '-.--.'],
-  ['SK', '...-.-'],
-  ['VA', '...-.-'],
-  ['VE', '...-.'],
-  ['SOS', '...---...'],
-] as const;
-
 const pulsesFromCode = flow(
   S.split(''),
   RNA.map((c) => (c === '.' ? DOT : DASH)),
@@ -166,9 +92,9 @@ const CW_CODE_LOOKUP = pipe(
   RR.fromEntries
 );
 
-export const lookupTokenText = (str: string) => RR.lookup(str.toUpperCase())(CW_TOKEN_LOOKUP);
+export const lookupTokenFromText = (str: string) => RR.lookup(str.toUpperCase())(CW_TOKEN_LOOKUP);
 
-export const lookupTokenCode = (dot: string, dash: string) => (str: string) =>
+export const lookupTokenFromCode = (dot: string, dash: string) => (str: string) =>
   pipe(CW_CODE_LOOKUP, RR.lookup(pipe(str, S.replace(dot, '.'), S.replace(dash, '-'))));
 
 export const stringifyTokens = (m: Message | Word | WordSpace | TokenSpace | Token): string =>
