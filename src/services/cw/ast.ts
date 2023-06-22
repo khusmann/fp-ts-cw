@@ -1,7 +1,7 @@
+import * as R from 'fp-ts/Reader';
 import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as RR from 'fp-ts/ReadonlyRecord';
-import * as Se from 'fp-ts/Semigroup';
-import { pipe, flow } from 'fp-ts/function';
+import { pipe, flow, apply } from 'fp-ts/function';
 import * as S from 'fp-ts/string';
 import { match, P } from 'ts-pattern';
 
@@ -97,7 +97,6 @@ export type TransformTokenSettings<T> = {
   readonly character: (c: Character) => T;
   readonly wordspace: T;
   readonly tokenspace: T;
-  readonly semigroup: Se.Semigroup<T>;
 };
 
 export type TransformCodeSettings<T> = {
@@ -106,68 +105,134 @@ export type TransformCodeSettings<T> = {
   readonly tokenSpace: T;
   readonly toneSpace: T;
   readonly wordSpace: T;
-  readonly semigroup: Se.Semigroup<T>;
 };
 
 export const transformCodeLevel =
   <T>(config: TransformCodeSettings<T>) =>
-  (m: Message | Token | Word | WordSpace | TokenSpace | Dot | Dash | ToneSpace): T =>
+  (m: Message | Token | Word | WordSpace | TokenSpace | Dot | Dash | ToneSpace): RNA.ReadonlyNonEmptyArray<T> =>
     match(m)
       .with(
         P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'prosign' }, { _tag: 'character' }),
-        ({ children }) => pipe(children, RNA.map(transformCodeLevel(config)), RNA.concatAll(config.semigroup))
+        ({ children }) => pipe(children, RNA.flatMap(transformCodeLevel(config)))
       )
-      .with({ _tag: 'wordspace' }, () => config.wordSpace)
-      .with({ _tag: 'tokenspace' }, () => config.tokenSpace)
-      .with({ _tag: 'dot' }, () => config.dot)
-      .with({ _tag: 'dash' }, () => config.dash)
-      .with({ _tag: 'tonespace' }, () => config.toneSpace)
+      .with({ _tag: 'wordspace' }, () => RNA.of(config.wordSpace))
+      .with({ _tag: 'tokenspace' }, () => RNA.of(config.tokenSpace))
+      .with({ _tag: 'dot' }, () => RNA.of(config.dot))
+      .with({ _tag: 'dash' }, () => RNA.of(config.dash))
+      .with({ _tag: 'tonespace' }, () => RNA.of(config.toneSpace))
       .exhaustive();
 
 export const transformTokenLevel =
   <T>(config: TransformTokenSettings<T>) =>
-  (m: Message | Word | WordSpace | TokenSpace | Token): T =>
+  (m: Message | Word | WordSpace | TokenSpace | Token): RNA.ReadonlyNonEmptyArray<T> =>
     match(m)
       .with(P.union({ _tag: 'message' }, { _tag: 'word' }), ({ children }) =>
-        pipe(children, RNA.map(transformTokenLevel(config)), RNA.concatAll(config.semigroup))
+        pipe(children, RNA.flatMap(transformTokenLevel(config)))
       )
-      .with({ _tag: 'prosign' }, config.prosign)
-      .with({ _tag: 'character' }, config.character)
-      .with({ _tag: 'wordspace' }, () => config.wordspace)
-      .with({ _tag: 'tokenspace' }, () => config.tokenspace)
+      .with({ _tag: 'prosign' }, flow(config.prosign, RNA.of))
+      .with({ _tag: 'character' }, flow(config.character, RNA.of))
+      .with({ _tag: 'wordspace' }, () => RNA.of(config.wordspace))
+      .with({ _tag: 'tokenspace' }, () => RNA.of(config.tokenspace))
       .exhaustive();
 
-export const stringifyTokens = transformTokenLevel({
-  prosign: ({ str }) => `<${str}>`,
-  character: ({ str }) => str,
-  wordspace: ' ',
-  tokenspace: '',
-  semigroup: S.Semigroup,
-});
+export const stringifyTokens = flow(
+  transformTokenLevel({
+    prosign: ({ str }) => `<${str}>`,
+    character: ({ str }) => str,
+    wordspace: ' ',
+    tokenspace: '',
+  }),
+  RNA.concatAll(S.Semigroup)
+);
 
-export const stringifyCode = transformCodeLevel({
-  dot: '.',
-  dash: '-',
-  tokenSpace: ' ',
-  toneSpace: '',
-  wordSpace: ' / ',
-  semigroup: S.Semigroup,
-});
+export const stringifyCode = flow(
+  transformCodeLevel({
+    dot: '.',
+    dash: '-',
+    tokenSpace: ' ',
+    toneSpace: '',
+    wordSpace: ' / ',
+  }),
+  RNA.concatAll(S.Semigroup)
+);
 
-export const stringifyPulses = transformCodeLevel({
-  dot: '.',
-  dash: '-',
-  tokenSpace: '/',
-  toneSpace: '|',
-  wordSpace: ' ',
-  semigroup: S.Semigroup,
-});
+export const stringifyPulses = flow(
+  transformCodeLevel({
+    dot: '.',
+    dash: '-',
+    tokenSpace: '/',
+    toneSpace: '|',
+    wordSpace: ' ',
+  }),
+  RNA.concatAll(S.Semigroup)
+);
 
-export const stringifyPulsesArr = transformCodeLevel({
-  dot: ['.'],
-  dash: ['-'],
-  tokenSpace: ['/'],
-  toneSpace: ['|'],
-  wordSpace: [' '],
-  semigroup: RNA.getSemigroup<string>(),
-});
+type PulseEnvelope = RNA.ReadonlyNonEmptyArray<number>;
+
+const toneShapeFn = (i: number, rampTime: number) =>
+  i < rampTime ? Math.pow(Math.sin((Math.PI * i) / (2 * rampTime)), 2) : 1;
+
+const toneEnvelope =
+  (duration: number) =>
+  ({ volume, sampleRate, rampTime }: AudioSettings & CwSettings): PulseEnvelope =>
+    pipe(
+      RNA.range(0, Math.floor(duration * sampleRate)),
+      RNA.map((i) => i / sampleRate),
+      RNA.map((i) => toneShapeFn(i, rampTime) * toneShapeFn(duration - i, rampTime)),
+      RNA.map((i) => i * volume)
+      //      RNA.map((i) => i * ((1 << (bitRate - 1)) - 1)),
+      //      RNA.map(Math.round)
+    );
+
+const silenceEnvelope =
+  (duration: number) =>
+  ({ sampleRate }: AudioSettings): PulseEnvelope =>
+    RNA.replicate(0)(Math.floor(duration * sampleRate));
+
+const padEnvelope = (audioConfig: AudioSettings) => silenceEnvelope(audioConfig.padTime)(audioConfig);
+
+type AudioSettings = {
+  readonly sampleRate: number;
+  readonly bitRate: number;
+  readonly padTime: number;
+  readonly rampTime: number;
+};
+
+type CwSettings = {
+  readonly freq: number;
+  readonly wpm: number;
+  readonly farnsworth: number;
+  readonly ews: number;
+  readonly volume: number;
+};
+
+export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
+  sampleRate: 8000,
+  bitRate: 16,
+  padTime: 0.05,
+  rampTime: 0.005, // Recommended by ARRL. See Section 2.202 of FCC rules and CCIR Radio regulations.
+};
+
+const ditTime = (s: CwSettings) => 1.2 / s.wpm;
+const dahTime = (s: CwSettings) => 3 * ditTime(s);
+const fditTime = (s: CwSettings) => (60 - s.farnsworth * 31 * ditTime(s)) / (s.farnsworth * (12 + 7));
+const letterSpaceTime = (s: CwSettings) => (s.farnsworth ? 3 * fditTime(s) : 3 * ditTime(s));
+const wordSpaceTime = (s: CwSettings) => 7 * (s.ews + 1) * (s.farnsworth ? fditTime(s) : ditTime(s));
+
+export const buildEnvelope = (cwConfig: CwSettings, audioConfig = DEFAULT_AUDIO_SETTINGS) =>
+  flow(
+    transformCodeLevel(
+      pipe(
+        {
+          dot: R.chain(toneEnvelope)(ditTime),
+          dash: R.chain(toneEnvelope)(dahTime),
+          tokenSpace: R.chainW(silenceEnvelope)(letterSpaceTime),
+          toneSpace: R.chainW(silenceEnvelope)(ditTime),
+          wordSpace: R.chainW(silenceEnvelope)(wordSpaceTime),
+        },
+        RR.map(apply({ ...cwConfig, ...audioConfig }))
+      )
+    ),
+    (a) => [padEnvelope(audioConfig), ...a, padEnvelope(audioConfig)] as const,
+    RNA.concatAll(RNA.getSemigroup<number>())
+  );

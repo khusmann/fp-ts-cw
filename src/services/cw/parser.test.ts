@@ -12,7 +12,7 @@ describe('ToneSeq', () => {
 
     pipe(
       result,
-      E.map((pr) => ast.stringifyTokens(pr)),
+      E.map(ast.stringifyTokens),
       E.fold(
         (e) => e,
         (a) => a
@@ -21,7 +21,7 @@ describe('ToneSeq', () => {
     );
     pipe(
       result,
-      E.map((pr) => ast.stringifyCode(pr)),
+      E.map(ast.stringifyCode),
       E.fold(
         (e) => e,
         (a) => a
@@ -30,7 +30,7 @@ describe('ToneSeq', () => {
     );
     pipe(
       result,
-      E.map((pr) => ast.stringifyPulses(pr)),
+      E.map(ast.stringifyPulses),
       E.fold(
         (e) => e,
         (a) => a
@@ -46,7 +46,7 @@ describe('ToneSeq', () => {
 
     pipe(
       result,
-      E.map((pr) => ast.stringifyTokens(pr)),
+      E.map(ast.stringifyTokens),
       E.fold(
         (e) => e,
         (a) => a
@@ -55,7 +55,7 @@ describe('ToneSeq', () => {
     );
     pipe(
       result,
-      E.map((pr) => ast.stringifyCode(pr)),
+      E.map(ast.stringifyCode),
       E.fold(
         (e) => e,
         (a) => a
@@ -64,10 +64,20 @@ describe('ToneSeq', () => {
     );
     pipe(
       result,
-      E.map((pr) => ast.stringifyPulses(pr)),
+      E.map(ast.stringifyPulses),
       E.fold(
         (e) => e,
         (a) => a
+      ),
+      console.log
+    );
+
+    pipe(
+      result,
+      E.map(ast.buildEnvelope({ freq: 700, wpm: 20, farnsworth: 10, ews: 0, volume: 1 })),
+      E.fold(
+        (e) => e,
+        (a) => a.join(' ')
       ),
       console.log
     );
