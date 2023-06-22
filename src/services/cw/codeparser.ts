@@ -1,5 +1,3 @@
-import * as R from 'fp-ts/Reader';
-import * as RT from 'fp-ts/ReaderT';
 import { pipe } from 'fp-ts/function';
 import { parser as P, char as C, string as S } from 'parser-ts';
 
