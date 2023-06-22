@@ -45,13 +45,13 @@ export const TONE_SPACE: ToneSpace = { _tag: 'tonespace' };
 export const WORD_SPACE: WordSpace = { _tag: 'wordspace' };
 export const TOKEN_SPACE: TokenSpace = { _tag: 'tokenspace' };
 
-export const character = (str: string, children: RNA.ReadonlyNonEmptyArray<Dot | Dash | ToneSpace>): Character => ({
+export const character = (str: string, children: RNA.ReadonlyNonEmptyArray<Code>): Character => ({
   _tag: 'character',
   str,
   children,
 });
 
-export const prosign = (str: string, children: RNA.ReadonlyNonEmptyArray<Dot | Dash | ToneSpace>): Prosign => ({
+export const prosign = (str: string, children: RNA.ReadonlyNonEmptyArray<Code>): Prosign => ({
   _tag: 'prosign',
   str,
   children,
@@ -70,7 +70,7 @@ export const message = (children: RNA.ReadonlyNonEmptyArray<Word | WordSpace>): 
 const pulsesFromCode = flow(
   S.split(''),
   RNA.map((c) => (c === '.' ? DOT : DASH)),
-  RNA.intersperse<Dot | Dash | ToneSpace>(TONE_SPACE)
+  RNA.intersperse<Code>(TONE_SPACE)
 );
 
 const tokenFromCode = (str: string, code: string): Token =>
@@ -110,7 +110,7 @@ export type TransformCodeSettings<T> = {
 
 export const transformCodeLevel =
   <T>(config: TransformCodeSettings<T>) =>
-  (m: Message | Token | Word | WordSpace | TokenSpace | Dot | Dash | ToneSpace): RNA.ReadonlyNonEmptyArray<T> =>
+  (m: Message | Word | WordSpace | Token | TokenSpace | Code): RNA.ReadonlyNonEmptyArray<T> =>
     match(m)
       .with(
         P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'prosign' }, { _tag: 'character' }),
@@ -170,6 +170,31 @@ export const stringifyPulses = flow(
 
 type PulseEnvelope = RNA.ReadonlyNonEmptyArray<number>;
 
+type Tone = {
+  readonly _tag: 'tone';
+  readonly duration: number;
+};
+
+type Silence = {
+  readonly _tag: 'silence';
+  readonly duration: number;
+};
+
+const tone = (duration: number): Tone => ({ _tag: 'tone', duration });
+const silence = (duration: number): Silence => ({ _tag: 'silence', duration });
+
+type PulseTrain = {
+  readonly volume: number;
+  readonly freq: number;
+  readonly pulses: RNA.ReadonlyNonEmptyArray<Tone | Silence>;
+};
+
+const pulseTrain = (volume: number, freq: number, pulses: RNA.ReadonlyNonEmptyArray<Tone | Silence>): PulseTrain => ({
+  volume,
+  freq,
+  pulses,
+});
+
 const toneShapeFn = (i: number, rampTime: number) =>
   i < rampTime ? Math.pow(Math.sin((Math.PI * i) / (2 * rampTime)), 2) : 1;
 
@@ -214,11 +239,31 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   rampTime: 0.005, // Recommended by ARRL. See Section 2.202 of FCC rules and CCIR Radio regulations.
 };
 
-const ditTime = (s: CwSettings) => 1.2 / s.wpm;
+const ditTime = (s: CwSettings) => {
+  console.log('dit');
+  return 1.2 / s.wpm;
+};
 const dahTime = (s: CwSettings) => 3 * ditTime(s);
 const fditTime = (s: CwSettings) => (60 - s.farnsworth * 31 * ditTime(s)) / (s.farnsworth * (12 + 7));
 const letterSpaceTime = (s: CwSettings) => (s.farnsworth ? 3 * fditTime(s) : 3 * ditTime(s));
 const wordSpaceTime = (s: CwSettings) => 7 * (s.ews + 1) * (s.farnsworth ? fditTime(s) : ditTime(s));
+
+export const buildPulseTrain = flow(
+  transformCodeLevel<R.Reader<CwSettings, Tone | Silence>>({
+    dot: flow(ditTime, tone),
+    dash: flow(dahTime, tone),
+    toneSpace: flow(ditTime, silence),
+    tokenSpace: flow(letterSpaceTime, silence),
+    wordSpace: flow(wordSpaceTime, silence),
+  }),
+  RNA.sequence(R.Applicative),
+  R.chain((pulses) =>
+    pipe(
+      R.ask<CwSettings>(),
+      R.map(({ volume, freq }) => pulseTrain(volume, freq, pulses))
+    )
+  )
+);
 
 export const buildEnvelope = (cwConfig: CwSettings, audioConfig = DEFAULT_AUDIO_SETTINGS) =>
   flow(
