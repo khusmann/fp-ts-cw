@@ -1,4 +1,5 @@
 import * as R from 'fp-ts/Reader';
+import * as RA from 'fp-ts/ReadonlyArray';
 import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as RR from 'fp-ts/ReadonlyRecord';
 import { pipe, flow, apply } from 'fp-ts/function';
@@ -222,17 +223,16 @@ const wordSpaceTime = (s: CwSettings) => 7 * (s.ews + 1) * (s.farnsworth ? fditT
 export const buildEnvelope = (cwConfig: CwSettings, audioConfig = DEFAULT_AUDIO_SETTINGS) =>
   flow(
     transformCodeLevel(
-      pipe(
-        {
-          dot: R.chain(toneEnvelope)(ditTime),
-          dash: R.chain(toneEnvelope)(dahTime),
-          tokenSpace: R.chainW(silenceEnvelope)(letterSpaceTime),
-          toneSpace: R.chainW(silenceEnvelope)(ditTime),
-          wordSpace: R.chainW(silenceEnvelope)(wordSpaceTime),
-        },
-        RR.map(apply({ ...cwConfig, ...audioConfig }))
-      )
+      pipe({
+        dot: R.chain(toneEnvelope)(ditTime),
+        dash: R.chain(toneEnvelope)(dahTime),
+        tokenSpace: R.chainW(silenceEnvelope)(letterSpaceTime),
+        toneSpace: R.chainW(silenceEnvelope)(ditTime),
+        wordSpace: R.chainW(silenceEnvelope)(wordSpaceTime),
+      })
     ),
-    (a) => [padEnvelope(audioConfig), ...a, padEnvelope(audioConfig)] as const,
-    RNA.concatAll(RNA.getSemigroup<number>())
+    RA.prependW(padEnvelope),
+    RA.appendW(padEnvelope),
+    RNA.sequence(R.Applicative),
+    apply({ ...cwConfig, ...audioConfig })
   );
