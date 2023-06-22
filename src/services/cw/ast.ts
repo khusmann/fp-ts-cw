@@ -90,8 +90,7 @@ const CW_CODE_LOOKUP = pipe(
 
 export const lookupTokenFromText = (str: string) => RR.lookup(str.toUpperCase())(CW_TOKEN_LOOKUP);
 
-export const lookupTokenFromCode = (dot: string, dash: string) => (str: string) =>
-  pipe(CW_CODE_LOOKUP, RR.lookup(pipe(str, S.replace(dot, '.'), S.replace(dash, '-'))));
+export const lookupTokenFromCode = (str: string) => RR.lookup(str)(CW_CODE_LOOKUP);
 
 export type TransformTokenSettings<T> = {
   readonly prosign: (p: Prosign) => T;

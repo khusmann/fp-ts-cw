@@ -8,7 +8,7 @@ import * as textParser from './textparser';
 
 describe('ToneSeq', () => {
   it('decodes valid text with prosigns', () => {
-    const result = run(textParser.parseMessage(), 'HELLo, + world  73 <BT>  <BK>\n');
+    const result = run(textParser.parseMessage, 'HELLo, + world  73 <BT>  <BK>\n');
 
     pipe(
       result,
@@ -40,7 +40,7 @@ describe('ToneSeq', () => {
   });
   it('decodes valid text with prosigns', () => {
     const result = run(
-      codeParser.parseMessage(),
+      codeParser.parseMessage,
       '.... . .-.. .-.. --- --..-- / .-.-. / .-- --- .-. .-.. -.. // --... ...-- / -...-//-...-.- .-.-'
     );
 
@@ -71,7 +71,7 @@ describe('ToneSeq', () => {
       ),
       console.log
     );
-
+    /* 
     pipe(
       run(textParser.parseMessage(), 'HELLo, + world  73 <BT>  <BK>\n'),
       E.map(ast.buildPulseTrain({ freq: 700, wpm: 20, farnsworth: 10, ews: 0, volume: 1 })),
@@ -82,6 +82,7 @@ describe('ToneSeq', () => {
       ),
       console.log
     );
+  */
   });
 });
 

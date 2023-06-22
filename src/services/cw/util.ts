@@ -8,8 +8,7 @@ export const parserFromOption = <I>(): (<O>(o: O.Option<O>) => P.Parser<I, O>) =
     (o) => P.succeed(o)
   );
 
-export const PeitherW = <I, A, B>(a: P.Parser<I, A>, b: () => P.Parser<I, B>) =>
-  P.either<I, A | B>(a, b);
+export const PeitherW = <I, A, B>(a: P.Parser<I, A>, b: () => P.Parser<I, B>) => P.either<I, A | B>(a, b);
 
 export const RNAintersperseW =
   <A, B>(a: A) =>
