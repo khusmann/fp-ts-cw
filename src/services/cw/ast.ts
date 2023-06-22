@@ -2,7 +2,7 @@ import * as R from 'fp-ts/Reader';
 import * as RA from 'fp-ts/ReadonlyArray';
 import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as RR from 'fp-ts/ReadonlyRecord';
-import { pipe, flow, apply } from 'fp-ts/function';
+import { pipe, flow } from 'fp-ts/function';
 import * as S from 'fp-ts/string';
 import { match, P } from 'ts-pattern';
 
@@ -198,24 +198,18 @@ const pulseTrain = (volume: number, freq: number, pulses: RNA.ReadonlyNonEmptyAr
 const toneShapeFn = (i: number, rampTime: number) =>
   i < rampTime ? Math.pow(Math.sin((Math.PI * i) / (2 * rampTime)), 2) : 1;
 
-const toneEnvelope =
-  (duration: number) =>
-  ({ volume, sampleRate, rampTime }: AudioSettings & CwSettings): PulseEnvelope =>
-    pipe(
-      RNA.range(0, Math.floor(duration * sampleRate)),
-      RNA.map((i) => i / sampleRate),
-      RNA.map((i) => toneShapeFn(i, rampTime) * toneShapeFn(duration - i, rampTime)),
-      RNA.map((i) => i * volume)
-      //      RNA.map((i) => i * ((1 << (bitRate - 1)) - 1)),
-      //      RNA.map(Math.round)
-    );
+const toneEnvelope = (duration: number, volume: number, sampleRate: number, rampTime: number): PulseEnvelope =>
+  pipe(
+    RNA.range(0, Math.floor(duration * sampleRate)),
+    RNA.map((i) => i / sampleRate),
+    RNA.map((i) => toneShapeFn(i, rampTime) * toneShapeFn(duration - i, rampTime)),
+    RNA.map((i) => i * volume)
+    //      RNA.map((i) => i * ((1 << (bitRate - 1)) - 1)),
+    //      RNA.map(Math.round)
+  );
 
-const silenceEnvelope =
-  (duration: number) =>
-  ({ sampleRate }: AudioSettings): PulseEnvelope =>
-    RNA.replicate(0)(Math.floor(duration * sampleRate));
-
-const padEnvelope = (audioConfig: AudioSettings) => silenceEnvelope(audioConfig.padTime)(audioConfig);
+const silenceEnvelope = (duration: number, sampleRate: number): PulseEnvelope =>
+  RNA.replicate(0)(Math.floor(duration * sampleRate));
 
 type AudioSettings = {
   readonly sampleRate: number;
@@ -248,36 +242,47 @@ const fditTime = (s: CwSettings) => (60 - s.farnsworth * 31 * ditTime(s)) / (s.f
 const letterSpaceTime = (s: CwSettings) => (s.farnsworth ? 3 * fditTime(s) : 3 * ditTime(s));
 const wordSpaceTime = (s: CwSettings) => 7 * (s.ews + 1) * (s.farnsworth ? fditTime(s) : ditTime(s));
 
-export const buildPulseTrain = flow(
-  transformCodeLevel<R.Reader<CwSettings, Tone | Silence>>({
-    dot: flow(ditTime, tone),
-    dash: flow(dahTime, tone),
-    toneSpace: flow(ditTime, silence),
-    tokenSpace: flow(letterSpaceTime, silence),
-    wordSpace: flow(wordSpaceTime, silence),
-  }),
-  RNA.sequence(R.Applicative),
-  R.chain((pulses) =>
-    pipe(
-      R.ask<CwSettings>(),
-      R.map(({ volume, freq }) => pulseTrain(volume, freq, pulses))
-    )
-  )
-);
-
-export const buildEnvelope = (cwConfig: CwSettings, audioConfig = DEFAULT_AUDIO_SETTINGS) =>
+export const buildPulseTrain = (cwConfig: CwSettings) =>
   flow(
-    transformCodeLevel(
-      pipe({
-        dot: R.chain(toneEnvelope)(ditTime),
-        dash: R.chain(toneEnvelope)(dahTime),
-        tokenSpace: R.chainW(silenceEnvelope)(letterSpaceTime),
-        toneSpace: R.chainW(silenceEnvelope)(ditTime),
-        wordSpace: R.chainW(silenceEnvelope)(wordSpaceTime),
-      })
+    pipe(
+      {
+        dot: flow(ditTime, tone),
+        dash: flow(dahTime, tone),
+        toneSpace: flow(ditTime, silence),
+        tokenSpace: flow(letterSpaceTime, silence),
+        wordSpace: flow(wordSpaceTime, silence),
+      },
+      RR.map((p) => p(cwConfig)),
+      transformCodeLevel
     ),
-    RA.prependW(padEnvelope),
-    RA.appendW(padEnvelope),
-    RNA.sequence(R.Applicative),
-    apply({ ...cwConfig, ...audioConfig })
+    (pulses) => pulseTrain(cwConfig.volume, cwConfig.freq, pulses)
+  );
+
+export const envelopeFromPulseTrain =
+  ({ sampleRate, rampTime } = DEFAULT_AUDIO_SETTINGS) =>
+  (train: PulseTrain) =>
+    pipe(
+      train.pulses,
+      RNA.map((p) =>
+        match(p)
+          .with({ _tag: 'tone' }, ({ duration }) => toneEnvelope(duration, train.volume, sampleRate, rampTime))
+          .with({ _tag: 'silence' }, ({ duration }) => silenceEnvelope(duration, sampleRate))
+          .exhaustive()
+      ),
+      RA.append(silenceEnvelope(DEFAULT_AUDIO_SETTINGS.padTime, sampleRate)),
+      RA.prepend(silenceEnvelope(DEFAULT_AUDIO_SETTINGS.padTime, sampleRate)),
+      RNA.concatAll(RNA.getSemigroup<number>())
+    );
+
+export const pcmFromPulseTrain = (audioConfig = DEFAULT_AUDIO_SETTINGS) =>
+  pipe(
+    R.ask<PulseTrain>(),
+    R.map((train) =>
+      pipe(
+        envelopeFromPulseTrain(audioConfig)(train),
+        RNA.mapWithIndex((idx, i) => i * Math.sin((2 * Math.PI * train.freq * idx) / audioConfig.sampleRate)),
+        RNA.map((i) => i * ((1 << (audioConfig.bitRate - 1)) - 1)),
+        RNA.map(Math.round)
+      )
+    )
   );

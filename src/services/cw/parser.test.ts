@@ -74,12 +74,13 @@ describe('ToneSeq', () => {
 
     pipe(
       run(textParser.parseMessage(), 'HELLo, + world  73 <BT>  <BK>\n'),
-      E.map(ast.buildEnvelope({ freq: 700, wpm: 20, farnsworth: 10, ews: 0, volume: 1 })),
+      E.map(ast.buildPulseTrain({ freq: 700, wpm: 20, farnsworth: 10, ews: 0, volume: 1 })),
+      E.map(ast.pcmFromPulseTrain()),
       E.fold(
         (e) => e,
         (a) => a.join(' ')
-      )
-      //console.log
+      ),
+      console.log
     );
   });
 });
