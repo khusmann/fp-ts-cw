@@ -32,11 +32,7 @@ const parseToken = (dot: string, dash: string) =>
   );
 
 const parseWord = (tokenParser: P.Parser<string, ast.Token>, tokenSpace: string) =>
-  pipe(
-    P.sepBy1(P.many(C.char(tokenSpace)), tokenParser),
-    P.map(RNAintersperseW(ast.TOKEN_SPACE)),
-    P.map(ast.word)
-  );
+  pipe(P.sepBy1(P.many(C.char(tokenSpace)), tokenParser), P.map(RNAintersperseW(ast.TOKEN_SPACE)), P.map(ast.word));
 
 export const parseMessage = (config = DEFAULT_SETTINGS) =>
   P.expected(
