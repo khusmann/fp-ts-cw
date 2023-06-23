@@ -1,14 +1,13 @@
-import * as Num from 'fp-ts/number';
 import * as R from 'fp-ts/Reader';
 import * as RA from 'fp-ts/ReadonlyArray';
 import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as RR from 'fp-ts/ReadonlyRecord';
 import { pipe, flow, identity } from 'fp-ts/function';
+import * as Num from 'fp-ts/number';
 import * as S from 'fp-ts/string';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 
 import { CW_SYMBOLS } from './constants';
-import { transform } from 'typescript';
 
 export type Dot = { readonly _tag: 'dot' };
 export type Dash = { readonly _tag: 'dash' };

@@ -1,6 +1,6 @@
 import * as E from 'fp-ts/Either';
 import * as R from 'fp-ts/Reader';
-import { pipe, flow } from 'fp-ts/function';
+import { pipe, flow, apply } from 'fp-ts/function';
 import { run } from 'parser-ts/code-frame';
 
 import * as ast from './ast';
@@ -72,19 +72,26 @@ describe('ToneSeq', () => {
       ),
       console.log
     );
+
+    const cwSettings = {
+      freq: 700,
+      wpm: 20,
+      farnsworth: 10,
+      ews: 0,
+      volume: 1,
+    };
+
     pipe(
       run(textParser.parseMessage, 'HELLo, + world  73 <BT>  <BK>\n'),
-      E.map(ast.buildPulseTrain),
-      E.map(R.chain(ast.pcmFromPulseTrain)),
-      E.map((r) =>
-        r({
-          freq: 700,
-          wpm: 20,
-          farnsworth: 10,
-          ews: 0,
-          volume: 1,
-          ...ast.DEFAULT_AUDIO_SETTINGS,
-        })
+      E.map(
+        flow(
+          ast.buildPulseTrain,
+          R.chain(ast.pcmFromPulseTrain),
+          apply({
+            ...cwSettings,
+            ...ast.DEFAULT_AUDIO_SETTINGS,
+          })
+        )
       ),
       E.fold(
         (e) => e,
