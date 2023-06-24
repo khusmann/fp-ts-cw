@@ -39,7 +39,7 @@ const codeParser = (settings: ParseCodeSettings) => {
 
   const wordSpace = pipe(
     wordSpaceC,
-    P.chain(() => P.succeed(ast.WORD_SPACE))
+    P.chain(() => P.succeed(ast.WORD_SPACE)),
   );
 
   const token = pipe(S.many1(P.either(dotC, () => dashC)), P.map(ast.lookupTokenFromCode), P.chain(parserFromOption()));
@@ -50,9 +50,9 @@ const codeParser = (settings: ParseCodeSettings) => {
   const message = P.expected(
     pipe(
       P.many1Till(P.surroundedBy(P.many(C.space))(PeitherW(word(token), () => wordSpace)), P.eof()),
-      P.map(ast.message)
+      P.map(ast.message),
     ),
-    'valid character or prosign'
+    'valid character or prosign',
   );
 
   return message;
@@ -62,7 +62,7 @@ export const parseCodeStr = (str: string) =>
   pipe(
     codeParser,
     R.map(apply(stream.stream(str.split('')))),
-    RE.bimap(codeParseError, (s) => s.value)
+    RE.bimap(codeParseError, (s) => s.value),
   );
 
 //////
@@ -99,26 +99,26 @@ const textParser = (settings: ParseTextSettings) => {
   const prosign = pipe(
     P.between(prosignStartC, prosignEndC)(C.many1(C.upper)),
     P.map(ast.lookupTokenFromText),
-    P.chain(parserFromOption())
+    P.chain(parserFromOption()),
   );
 
   const character = pipe(P.item<string>(), P.map(ast.lookupTokenFromText), P.chain(parserFromOption()));
 
   const wordSpace = pipe(
     wordSpaceC,
-    P.map(() => ast.WORD_SPACE)
+    P.map(() => ast.WORD_SPACE),
   );
 
   const word = (prosignParser: P.Parser<string, ast.Token>, characterParser: P.Parser<string, ast.Token>) =>
     pipe(
       P.many1(PeitherW(prosignParser, () => characterParser)),
       P.map(RNAintersperseW(ast.TOKEN_SPACE)),
-      P.map(ast.word)
+      P.map(ast.word),
     );
 
   const message = P.expected(
     pipe(P.many1Till(pipe(PeitherW(word(prosign, character), () => wordSpace)), P.eof()), P.map(ast.message)),
-    'valid character or prosign'
+    'valid character or prosign',
   );
 
   return message;
@@ -128,5 +128,5 @@ export const parseTextStr = (str: string) =>
   pipe(
     textParser,
     R.map(apply(stream.stream(str.split('')))),
-    RE.bimap(textParseError, (s) => s.value)
+    RE.bimap(textParseError, (s) => s.value),
   );

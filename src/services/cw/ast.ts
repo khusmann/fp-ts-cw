@@ -70,7 +70,7 @@ export const message = (children: RNA.ReadonlyNonEmptyArray<Word | WordSpace>): 
 const pulsesFromCode = flow(
   S.split(''),
   RNA.map((c) => (c === '.' ? DOT : DASH)),
-  RNA.intersperse<Code>(TONE_SPACE)
+  RNA.intersperse<Code>(TONE_SPACE),
 );
 
 const tokenFromCode = (str: string, code: string): Token =>
@@ -79,13 +79,13 @@ const tokenFromCode = (str: string, code: string): Token =>
 const CW_TOKEN_LOOKUP = pipe(
   CW_SYMBOLS,
   RNA.map(([str, code]: (typeof CW_SYMBOLS)[number]) => [str, tokenFromCode(str, code)] as const),
-  RR.fromEntries
+  RR.fromEntries,
 );
 
 const CW_CODE_LOOKUP = pipe(
   CW_SYMBOLS,
   RNA.map(([str, code]: (typeof CW_SYMBOLS)[number]) => [code, tokenFromCode(str, code)] as const),
-  RR.fromEntries
+  RR.fromEntries,
 );
 
 export const lookupTokenFromText = (str: string) => RR.lookup(str.toUpperCase())(CW_TOKEN_LOOKUP);
@@ -104,7 +104,7 @@ export const stringify = (m: Message | Word | WordSpace | TokenSpace | Token): s
 export const stringifyCode = (m: AstEntity): string =>
   match(m)
     .with(P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'character' }, { _tag: 'prosign' }), ({ children }) =>
-      children.map(stringifyCode).join('')
+      children.map(stringifyCode).join(''),
     )
     .with({ _tag: 'dot' }, () => '.')
     .with({ _tag: 'dash' }, () => '-')
@@ -116,7 +116,7 @@ export const stringifyCode = (m: AstEntity): string =>
 export const stringifyTones = (m: AstEntity) =>
   match(m)
     .with(P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'character' }, { _tag: 'prosign' }), ({ children }) =>
-      children.map(stringifyCode).join('')
+      children.map(stringifyCode).join(''),
     )
     .with({ _tag: 'dot' }, () => '.')
     .with({ _tag: 'dash' }, () => '-')

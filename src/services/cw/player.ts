@@ -13,7 +13,7 @@ type ParseSettings = {
 const parseMessage = (message: string): R.Reader<ParseSettings, ast.Message> =>
   pipe(
     R.ask<ParseSettings>(),
-    R.map(() => ast.message([ast.WORD_SPACE]))
+    R.map(() => ast.message([ast.WORD_SPACE])),
   );
 
 type ToneEnvelope = {
@@ -26,7 +26,7 @@ type ToneEnvelope = {
 const envelopeFromAst = (message: ast.Message): R.Reader<ast.CwSettings & ast.AudioSettings, ToneEnvelope> =>
   pipe(
     R.ask<ast.CwSettings>(),
-    R.map(() => ({ bitRate: 16, sampleRate: 8000, freq: 700, data: [0] }))
+    R.map(() => ({ bitRate: 16, sampleRate: 8000, freq: 700, data: [0] })),
   );
 
 type Pcm = {
@@ -55,7 +55,7 @@ const playPcm =
 const doSomething = (i: number): R.Reader<PlayerConfig, number> =>
   pipe(
     R.ask<PlayerConfig>(),
-    R.map(() => 0)
+    R.map(() => 0),
   );
 
 export const playMessage = (message: string) =>
@@ -66,7 +66,7 @@ export const playMessage = (message: string) =>
     R.map(pcmFromEnvelope),
     RT.fromReader,
     RT.flatMapTask(playPcm),
-    RT.map(doSomething)
+    RT.map(doSomething),
   );
 
 export const playMessage2 = (message: string) =>
@@ -76,7 +76,7 @@ export const playMessage2 = (message: string) =>
     R.chainW(envelopeFromAst),
     RT.fromReader,
     RT.flatMapTask(playPcm),
-    RT.chainReaderKW(doSomething)
+    RT.chainReaderKW(doSomething),
   );
 
 //import { createMachine, interpret } from 'xstate';

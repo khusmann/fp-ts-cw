@@ -83,15 +83,15 @@ const buildPulseTrain = (m: AstEntity): R.Reader<CwTimings, PulseTrain> =>
       match(m)
         .with(
           P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'character' }, { _tag: 'prosign' }),
-          ({ children }) => pipe(children, RNA.map(buildPulseTrain), RNA.sequence(R.Applicative), R.map(RNA.flatten))
+          ({ children }) => pipe(children, RNA.map(buildPulseTrain), RNA.sequence(R.Applicative), R.map(RNA.flatten)),
         )
         .with({ _tag: 'dot' }, () => R.of(RNA.of(tone(timings.dit))))
         .with({ _tag: 'dash' }, () => R.of(RNA.of(tone(timings.dah))))
         .with({ _tag: 'tonespace' }, () => R.of(RNA.of(silence(timings.dit))))
         .with({ _tag: 'tokenspace' }, () => R.of(RNA.of(silence(timings.tokenSpace))))
         .with({ _tag: 'wordspace' }, () => R.of(RNA.of(silence(timings.wordSpace))))
-        .exhaustive()
-    )
+        .exhaustive(),
+    ),
   );
 
 const toneShapeFn = (t: number, rampTime: number) =>
@@ -104,15 +104,15 @@ const renderToneEnvelope = (duration: number) =>
       pipe(
         RNA.range(0, Math.floor(duration * sampleRate)),
         RNA.map((i) => i / sampleRate),
-        RNA.map((t) => toneShapeFn(t, rampTime) * toneShapeFn(duration - t, rampTime) * volume)
-      )
-    )
+        RNA.map((t) => toneShapeFn(t, rampTime) * toneShapeFn(duration - t, rampTime) * volume),
+      ),
+    ),
   );
 
 const renderSilenceEnvelope = (duration: number) =>
   pipe(
     R.ask<AudioSettings>(),
-    R.map(({ sampleRate }) => RNA.replicate(0)(Math.floor(duration * sampleRate)))
+    R.map(({ sampleRate }) => RNA.replicate(0)(Math.floor(duration * sampleRate))),
   );
 
 const renderSynthEnvelope = (tt: PulseTrain) =>
@@ -122,10 +122,10 @@ const renderSynthEnvelope = (tt: PulseTrain) =>
       match(tone)
         .with({ _tag: 'tone' }, ({ duration }) => renderToneEnvelope(duration))
         .with({ _tag: 'silence' }, ({ duration }) => renderSilenceEnvelope(duration))
-        .exhaustive()
+        .exhaustive(),
     ),
     RNA.sequence(R.Applicative),
-    R.map(RNA.flatten)
+    R.map(RNA.flatten),
   );
 
 const padSampleData = (data: RNA.ReadonlyNonEmptyArray<number>) =>
@@ -134,9 +134,9 @@ const padSampleData = (data: RNA.ReadonlyNonEmptyArray<number>) =>
     R.chain(({ padTime }) =>
       pipe(
         renderSilenceEnvelope(padTime),
-        R.map((se) => pipe(se, RNA.concat(data), RNA.concat(se)))
-      )
-    )
+        R.map((se) => pipe(se, RNA.concat(data), RNA.concat(se))),
+      ),
+    ),
   );
 
 const pcmDataFromSynthEnvelope = (envelope: SynthEnvelope) =>
@@ -146,9 +146,9 @@ const pcmDataFromSynthEnvelope = (envelope: SynthEnvelope) =>
       pipe(
         envelope,
         RNA.mapWithIndex((idx, i) => i * Math.sin((2 * Math.PI * freq * idx) / sampleRate)),
-        RNA.map((i) => Math.round(i * ((1 << (bitRate - 1)) - 1)))
-      )
-    )
+        RNA.map((i) => Math.round(i * ((1 << (bitRate - 1)) - 1))),
+      ),
+    ),
   );
 
 export const renderSynthSample = (m: AstEntity): R.Reader<AudioSettings & CwTimings, SynthSample> =>
@@ -158,7 +158,7 @@ export const renderSynthSample = (m: AstEntity): R.Reader<AudioSettings & CwTimi
       freq: settings.freq,
       sampleRate: settings.sampleRate,
       envelope: pipe(m, buildPulseTrain, R.chainW(renderSynthEnvelope), R.chainW(padSampleData), apply(settings)),
-    }))
+    })),
   );
 
 export const renderAudioSample = (m: AstEntity): R.Reader<AudioSettings & CwTimings, AudioSample> =>
@@ -173,7 +173,7 @@ export const renderAudioSample = (m: AstEntity): R.Reader<AudioSettings & CwTimi
         R.chainW(renderSynthEnvelope),
         R.chainW(padSampleData),
         R.chainW(pcmDataFromSynthEnvelope),
-        apply(settings)
+        apply(settings),
       ),
-    }))
+    })),
   );

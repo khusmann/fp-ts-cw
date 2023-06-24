@@ -13,14 +13,14 @@ describe('ToneSeq', () => {
       RE.map((s) => s.data.join(' ')),
       RE.match(
         (e) => `Expected: ${e.expected} (idx: ${e.idx})`,
-        (s) => s
+        (s) => s,
       ),
       apply({
         ...DEFAULT_PARSE_TEXT_SETTINGS,
         ...calculateTimings({ wpm: 20, farnsworth: 10, ews: 0 }),
         ...({ freq: 700, sampleRate: 8000, bitRate: 16, padTime: 0.05, rampTime: 0.005, volume: 1 } as const),
       }),
-      console.log
+      console.log,
     );
     /*
     const result = run(textParser.parseMessage, 'HELLo, + world  73 <BT>  <BK>\n');
