@@ -1,20 +1,23 @@
-import { readerEither as RE } from 'fp-ts';
-import { pipe, flow, apply } from 'fp-ts/function';
-import { run } from 'parser-ts/code-frame';
+import { readerEither as RE, reader as R } from 'fp-ts';
+import { pipe, apply } from 'fp-ts/function';
 
-import * as ast from './ast';
 import { parseTextStr, parseCodeStr, DEFAULT_PARSE_TEXT_SETTINGS, DEFAULT_PARSE_CODE_SETTINGS } from './parser';
+import { calculateTimings, renderAudioSample, renderSynthSample } from './render';
 
 describe('ToneSeq', () => {
   it('decodes valid text with prosigns', () => {
     pipe(
       'HELLo, + world  73 <BT>  <BK>\n',
       parseTextStr,
-      RE.chainReaderKW(ast.renderAudioSample),
+      RE.chainReaderKW(renderAudioSample),
       RE.map((s) => s.data.join(' ')),
+      RE.match(
+        (e) => `Expected: ${e.expected} (idx: ${e.idx})`,
+        (s) => s
+      ),
       apply({
         ...DEFAULT_PARSE_TEXT_SETTINGS,
-        ...ast.calculateTimings({ wpm: 20, farnsworth: 10, ews: 0 }),
+        ...calculateTimings({ wpm: 20, farnsworth: 10, ews: 0 }),
         ...({ freq: 700, sampleRate: 8000, bitRate: 16, padTime: 0.05, rampTime: 0.005, volume: 1 } as const),
       }),
       console.log
