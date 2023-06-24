@@ -2,10 +2,9 @@ import * as R from 'fp-ts/Reader';
 import * as RA from 'fp-ts/ReadonlyArray';
 import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
 import * as RR from 'fp-ts/ReadonlyRecord';
-import { pipe, flow, identity } from 'fp-ts/function';
-import * as Num from 'fp-ts/number';
+import { pipe, flow, apply } from 'fp-ts/function';
 import * as S from 'fp-ts/string';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 
 import { CW_SYMBOLS } from './constants';
 
@@ -38,6 +37,61 @@ export type Word = {
 export type Message = {
   readonly _tag: 'message';
   readonly children: RNA.ReadonlyNonEmptyArray<Word | WordSpace>;
+};
+
+export type AstEntity = Message | Word | WordSpace | Token | TokenSpace | Code;
+
+export type CwSettings = {
+  readonly wpm: number;
+  readonly farnsworth: number;
+  readonly ews: number;
+};
+
+type CwTimings = {
+  readonly dit: number;
+  readonly dah: number;
+  readonly tokenSpace: number;
+  readonly wordSpace: number;
+};
+
+type SampleRate = 8000 | 16000 | 32000 | 44100 | 48000;
+type BitRate = 8 | 16 | 24;
+
+export type AudioSettings = {
+  readonly sampleRate: SampleRate;
+  readonly bitRate: BitRate;
+  readonly padTime: number;
+  readonly rampTime: number;
+  readonly volume: number;
+  readonly freq: number;
+};
+
+type Tone = {
+  readonly _tag: 'tone';
+  readonly duration: number;
+};
+
+type Silence = {
+  readonly _tag: 'silence';
+  readonly duration: number;
+};
+
+type ToneTrain = RNA.ReadonlyNonEmptyArray<Tone | Silence>;
+
+type PcmData = RNA.ReadonlyNonEmptyArray<number>;
+
+export type AudioSample = {
+  readonly sampleRate: SampleRate;
+  readonly bitRate: BitRate;
+  readonly data: PcmData;
+};
+
+type SynthToneEnvelope = RNA.ReadonlyNonEmptyArray<number>;
+
+type SynthTone = {
+  readonly freq: number;
+  readonly sampleRate: SampleRate;
+  readonly envelope: SynthToneEnvelope;
 };
 
 export const DOT: Dot = { _tag: 'dot' };
@@ -93,260 +147,148 @@ export const lookupTokenFromText = (str: string) => RR.lookup(str.toUpperCase())
 
 export const lookupTokenFromCode = (str: string) => RR.lookup(str)(CW_CODE_LOOKUP);
 
-export type TransformTokenSettings<T> = {
-  readonly prosign: (p: Prosign) => T;
-  readonly character: (c: Character) => T;
-  readonly wordspace: T;
-  readonly tokenspace: T;
+export const stringify = (m: Message | Word | WordSpace | TokenSpace | Token): string =>
+  match(m)
+    .with(P.union({ _tag: 'message' }, { _tag: 'word' }), ({ children }) => children.map(stringify).join(''))
+    .with({ _tag: 'prosign' }, ({ str }) => `<${str}>`)
+    .with({ _tag: 'character' }, ({ str }) => str)
+    .with({ _tag: 'wordspace' }, () => ' ')
+    .with({ _tag: 'tokenspace' }, () => '')
+    .exhaustive();
+
+export const stringifyCode = (m: AstEntity): string =>
+  match(m)
+    .with(P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'character' }, { _tag: 'prosign' }), ({ children }) =>
+      children.map(stringifyCode).join('')
+    )
+    .with({ _tag: 'dot' }, () => '.')
+    .with({ _tag: 'dash' }, () => '-')
+    .with({ _tag: 'tonespace' }, () => '')
+    .with({ _tag: 'tokenspace' }, () => ' ')
+    .with({ _tag: 'wordspace' }, () => ' / ')
+    .exhaustive();
+
+export const stringifyTones = (m: AstEntity) =>
+  match(m)
+    .with(P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'character' }, { _tag: 'prosign' }), ({ children }) =>
+      children.map(stringifyCode).join('')
+    )
+    .with({ _tag: 'dot' }, () => '.')
+    .with({ _tag: 'dash' }, () => '-')
+    .with({ _tag: 'tonespace' }, () => '|')
+    .with({ _tag: 'tokenspace' }, () => '/')
+    .with({ _tag: 'wordspace' }, () => ' ')
+    .exhaustive();
+
+const tone = (duration: number): Tone => ({ _tag: 'tone', duration });
+
+const silence = (duration: number): Silence => ({ _tag: 'silence', duration });
+
+export const calculateTimings = ({ wpm, farnsworth, ews }: CwSettings): CwTimings => {
+  const dit = 1.2 / wpm;
+  const dah = 3 * dit;
+  const fdit = (60 - farnsworth * 31 * dit) / (farnsworth * (12 + 7));
+  const tokenSpace = farnsworth ? 3 * fdit : 3 * dit;
+  const wordSpace = 7 * (ews + 1) * (farnsworth ? fdit : dit);
+  return {
+    dit,
+    dah,
+    tokenSpace,
+    wordSpace,
+  };
 };
 
-export type TransformCodeSettings<T> = {
-  readonly dot: T;
-  readonly dash: T;
-  readonly tokenSpace: T;
-  readonly toneSpace: T;
-  readonly wordSpace: T;
-};
-
-export const transformCodeLevel = <T>(
-  m: Message | Word | WordSpace | Token | TokenSpace | Code
-): R.Reader<TransformCodeSettings<T>, RNA.ReadonlyNonEmptyArray<T>> =>
+const buildToneTrain = (m: AstEntity): R.Reader<CwTimings, ToneTrain> =>
   pipe(
-    R.ask<TransformCodeSettings<T>>(),
-    R.chain(({ wordSpace, tokenSpace, dot, dash, toneSpace }) => {
-      switch (m._tag) {
-        case 'message':
-          return pipe(
-            m.children,
-            RNA.map((i) => transformCodeLevel<T>(i)),
-            RNA.sequence(R.Applicative),
-            R.map(RNA.flatten)
-          );
-        case 'word':
-          return pipe(
-            m.children,
-            RNA.map((i) => transformCodeLevel<T>(i)),
-            RNA.sequence(R.Applicative),
-            R.map(RNA.flatten)
-          );
-        case 'prosign':
-          return pipe(
-            m.children,
-            RNA.map((i) => transformCodeLevel<T>(i)),
-            RNA.sequence(R.Applicative),
-            R.map(RNA.flatten)
-          );
-        case 'character':
-          return pipe(
-            m.children,
-            RNA.map((i) => transformCodeLevel<T>(i)),
-            RNA.sequence(R.Applicative),
-            R.map(RNA.flatten)
-          );
-        case 'wordspace':
-          return R.of(RNA.of(wordSpace));
-        case 'tokenspace':
-          return R.of(RNA.of(tokenSpace));
-        case 'dot':
-          return R.of(RNA.of(dot));
-        case 'dash':
-          return R.of(RNA.of(dash));
-        case 'tonespace':
-          return R.of(RNA.of(toneSpace));
-      }
-    })
+    R.ask<CwTimings>(),
+    R.chain((timings) =>
+      match(m)
+        .with(
+          P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'character' }, { _tag: 'prosign' }),
+          ({ children }) => pipe(children, RNA.map(buildToneTrain), RNA.sequence(R.Applicative), R.map(RNA.flatten))
+        )
+        .with({ _tag: 'dot' }, () => R.of(RNA.of(tone(timings.dit))))
+        .with({ _tag: 'dash' }, () => R.of(RNA.of(tone(timings.dah))))
+        .with({ _tag: 'tonespace' }, () => R.of(RNA.of(silence(timings.dit))))
+        .with({ _tag: 'tokenspace' }, () => R.of(RNA.of(silence(timings.tokenSpace))))
+        .with({ _tag: 'wordspace' }, () => R.of(RNA.of(silence(timings.wordSpace))))
+        .exhaustive()
+    )
   );
 
-export const transformTokenLevel = <T>(
-  m: Message | Word | WordSpace | TokenSpace | Token
-): R.Reader<TransformTokenSettings<T>, RNA.ReadonlyNonEmptyArray<T>> =>
+const toneShapeFn = (t: number, rampTime: number) =>
+  t < rampTime ? Math.pow(Math.sin((Math.PI * t) / (2 * rampTime)), 2) : 1;
+
+const renderToneEnvelope = (duration: number) =>
   pipe(
-    R.ask<TransformTokenSettings<T>>(),
-    R.chain(({ prosign, character, wordspace, tokenspace }) => {
-      switch (m._tag) {
-        case 'message':
-          return pipe(
-            m.children,
-            RNA.map((i) => transformTokenLevel<T>(i)),
-            RNA.sequence(R.Applicative),
-            R.map(RNA.flatten)
-          );
-        case 'word':
-          return pipe(
-            m.children,
-            RNA.map((i) => transformTokenLevel<T>(i)),
-            RNA.sequence(R.Applicative),
-            R.map(RNA.flatten)
-          );
-        case 'prosign':
-          return R.of(RNA.of(prosign(m)));
-        case 'character':
-          return R.of(RNA.of(character(m)));
-        case 'wordspace':
-          return R.of(RNA.of(wordspace));
-        case 'tokenspace':
-          return R.of(RNA.of(tokenspace));
-      }
-    })
-  );
-
-export const stringifyTokens = (m: Message | Word | WordSpace | TokenSpace | Token) =>
-  pipe(
-    transformTokenLevel<string>(m)({
-      prosign: ({ str }) => `<${str}>`,
-      character: ({ str }) => str,
-      wordspace: ' ',
-      tokenspace: '',
-    }),
-    RNA.concatAll(S.Semigroup)
-  );
-
-export const stringifyCode = (m: Message | Word | WordSpace | TokenSpace | Token | Code) =>
-  pipe(
-    transformCodeLevel<string>(m)({
-      dot: '.',
-      dash: '-',
-      tokenSpace: ' ',
-      toneSpace: '',
-      wordSpace: ' / ',
-    }),
-    RNA.concatAll(S.Semigroup)
-  );
-
-export const stringifyPulses = (m: Message | Word | WordSpace | TokenSpace | Token | Code) =>
-  pipe(
-    transformCodeLevel<string>(m)({
-      dot: '.',
-      dash: '-',
-      tokenSpace: '/',
-      toneSpace: '|',
-      wordSpace: ' ',
-    }),
-    RNA.concatAll(S.Semigroup)
-  );
-
-type PulseEnvelope = RNA.ReadonlyNonEmptyArray<number>;
-
-type Tone = {
-  readonly _tag: 'tone';
-  readonly duration: number;
-};
-
-type Silence = {
-  readonly _tag: 'silence';
-  readonly duration: number;
-};
-
-const tone = (duration: number): Tone | Silence => ({ _tag: 'tone', duration });
-const silence = (duration: number): Silence | Tone => ({ _tag: 'silence', duration });
-
-type PulseTrain = RNA.ReadonlyNonEmptyArray<Tone | Silence>;
-
-const toneShapeFn =
-  (i: number) =>
-  ({ rampTime }: CwSettings & AudioSettings) =>
-    i < rampTime ? Math.pow(Math.sin((Math.PI * i) / (2 * rampTime)), 2) : 1;
-
-const toneEnvelopeFn = (duration: number) => (i: number) =>
-  pipe([i, duration - i] as const, RNA.map(toneShapeFn), RNA.sequence(R.Applicative));
-
-const toneEnvelope = (duration: number) =>
-  pipe(
-    R.ask<AudioSettings & CwSettings>(),
-    R.chain(({ sampleRate, volume }) =>
+    R.ask<AudioSettings>(),
+    R.map(({ sampleRate, rampTime, volume }) =>
       pipe(
         RNA.range(0, Math.floor(duration * sampleRate)),
         RNA.map((i) => i / sampleRate),
-        RNA.map(toneEnvelopeFn(duration)),
-        RNA.sequence(R.Applicative),
-        R.map(
-          flow(
-            RNA.map(RNA.foldMap(Num.MonoidProduct)(identity)),
-            RNA.map((i) => i * volume)
-          )
-        )
+        RNA.map((t) => toneShapeFn(t, rampTime) * toneShapeFn(duration - t, rampTime) * volume)
       )
     )
   );
 
-const silenceEnvelope =
-  (duration: number) =>
-  ({ sampleRate }: CwSettings & AudioSettings): PulseEnvelope =>
-    RNA.replicate(0)(Math.floor(duration * sampleRate));
-
-type AudioSettings = {
-  readonly sampleRate: number;
-  readonly bitRate: number;
-  readonly padTime: number;
-  readonly rampTime: number;
-};
-
-type CwSettings = {
-  readonly freq: number;
-  readonly wpm: number;
-  readonly farnsworth: number;
-  readonly ews: number;
-  readonly volume: number;
-};
-
-export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
-  sampleRate: 8000,
-  bitRate: 16,
-  padTime: 0.05,
-  rampTime: 0.005, // Recommended by ARRL. See Section 2.202 of FCC rules and CCIR Radio regulations.
-};
-
-const ditTime = (s: CwSettings) => 1.2 / s.wpm;
-const dahTime = (s: CwSettings) => 3 * ditTime(s);
-const fditTime = (s: CwSettings) => (60 - s.farnsworth * 31 * ditTime(s)) / (s.farnsworth * (12 + 7));
-const letterSpaceTime = (s: CwSettings) => (s.farnsworth ? 3 * fditTime(s) : 3 * ditTime(s));
-const wordSpaceTime = (s: CwSettings) => 7 * (s.ews + 1) * (s.farnsworth ? fditTime(s) : ditTime(s));
-
-export const buildPulseTrain = (m: Message | Word | WordSpace | TokenSpace | Token | Code) =>
+const renderSilenceEnvelope = (duration: number) =>
   pipe(
-    transformCodeLevel<R.Reader<CwSettings, Tone | Silence>>(m)({
-      dot: flow(ditTime, tone),
-      dash: flow(dahTime, tone),
-      toneSpace: flow(ditTime, silence),
-      tokenSpace: flow(letterSpaceTime, silence),
-      wordSpace: flow(wordSpaceTime, silence),
-    }),
-    RNA.sequence(R.Applicative)
+    R.ask<AudioSettings>(),
+    R.map(({ sampleRate }) => RNA.replicate(0)(Math.floor(duration * sampleRate)))
   );
 
-export const envelopeFromPulseTrain = (train: PulseTrain) =>
+const renderSynthToneEnvelope = (tt: ToneTrain) =>
   pipe(
-    R.ask<AudioSettings & CwSettings>(),
+    R.ask<AudioSettings>(),
     R.chain(({ padTime }) =>
       pipe(
-        train,
-        RNA.map((p) =>
-          match(p)
-            .with({ _tag: 'tone' }, ({ duration }) => toneEnvelope(duration))
-            .with({ _tag: 'silence' }, ({ duration }) => silenceEnvelope(duration))
+        tt,
+        RNA.map((tone) =>
+          match(tone)
+            .with({ _tag: 'tone' }, ({ duration }) => renderToneEnvelope(duration))
+            .with({ _tag: 'silence' }, ({ duration }) => renderSilenceEnvelope(duration))
             .exhaustive()
         ),
-        RA.append(silenceEnvelope(padTime)),
-        RA.prepend(silenceEnvelope(padTime)),
+        RA.append(renderSilenceEnvelope(padTime)),
+        RA.prepend(renderSilenceEnvelope(padTime)),
         RNA.sequence(R.Applicative),
-        R.map(RNA.concatAll(RNA.getSemigroup<number>()))
+        R.map(RNA.flatten)
       )
     )
   );
 
-export const pcmFromPulseTrain = (train: PulseTrain) =>
-  pipe(
-    R.ask<AudioSettings & CwSettings>(),
-    R.chain(({ sampleRate, bitRate, freq }) =>
-      pipe(
-        envelopeFromPulseTrain(train),
-        R.map(
-          flow(
-            RNA.mapWithIndex((idx, i) => i * Math.sin((2 * Math.PI * freq * idx) / sampleRate)),
-            RNA.map((i) => i * ((1 << (bitRate - 1)) - 1)),
-            RNA.map(Math.round)
-          )
+const renderPcmData = flow(
+  renderSynthToneEnvelope,
+  R.chain((envelope) =>
+    pipe(
+      R.ask<AudioSettings>(),
+      R.map(({ bitRate, freq, sampleRate }) =>
+        pipe(
+          envelope,
+          RNA.mapWithIndex((idx, i) => i * Math.sin((2 * Math.PI * freq * idx) / sampleRate)),
+          RNA.map((i) => Math.round(i * ((1 << (bitRate - 1)) - 1)))
         )
       )
     )
+  )
+);
+
+export const renderSynthTone = (m: AstEntity): R.Reader<AudioSettings & CwTimings, SynthTone> =>
+  pipe(
+    R.ask<AudioSettings & CwTimings>(),
+    R.map((settings) => ({
+      freq: settings.freq,
+      sampleRate: settings.sampleRate,
+      envelope: pipe(m, buildToneTrain, R.chainW(renderSynthToneEnvelope), apply(settings)),
+    }))
+  );
+
+export const renderAudioSample = (m: AstEntity): R.Reader<AudioSettings & CwTimings, AudioSample> =>
+  pipe(
+    R.ask<AudioSettings & CwTimings>(),
+    R.map((settings) => ({
+      bitRate: settings.bitRate,
+      sampleRate: settings.sampleRate,
+      data: pipe(m, buildToneTrain, R.chainW(renderPcmData), apply(settings)),
+    }))
   );
