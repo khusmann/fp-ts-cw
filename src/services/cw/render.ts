@@ -1,6 +1,6 @@
 import * as R from 'fp-ts/Reader';
 import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
-import { pipe, apply } from 'fp-ts/function';
+import { pipe } from 'fp-ts/function';
 import { match, P } from 'ts-pattern';
 
 import type { AstEntity } from './ast';
@@ -19,15 +19,18 @@ type CwTimings = {
 };
 
 type SampleRate = 8000 | 16000 | 32000 | 44100 | 48000;
-type BitRate = 8 | 16 | 24;
+type BitDepth = 8 | 16 | 24;
 
-export type AudioSettings = {
+export type SynthSettings = {
   readonly sampleRate: SampleRate;
-  readonly bitRate: BitRate;
-  readonly padTime: number;
   readonly rampTime: number;
   readonly volume: number;
   readonly freq: number;
+  readonly padTime: number;
+};
+
+export type QuantizationSettings = {
+  readonly bitDepth: BitDepth;
 };
 
 type Tone = {
@@ -54,7 +57,7 @@ type PcmData = RNA.ReadonlyNonEmptyArray<number>;
 
 export type AudioSample = {
   readonly sampleRate: SampleRate;
-  readonly bitRate: BitRate;
+  readonly bitDepth: BitDepth;
   readonly data: PcmData;
 };
 
@@ -76,7 +79,7 @@ export const calculateTimings = ({ wpm, farnsworth, ews }: CwSettings): CwTiming
   };
 };
 
-const buildPulseTrain = (m: AstEntity): R.Reader<CwTimings, PulseTrain> =>
+export const buildPulseTrain = (m: AstEntity): R.Reader<CwTimings, PulseTrain> =>
   pipe(
     R.ask<CwTimings>(),
     R.chain((timings) =>
@@ -99,7 +102,7 @@ const toneShapeFn = (t: number, rampTime: number) =>
 
 const renderToneEnvelope = (duration: number) =>
   pipe(
-    R.ask<AudioSettings>(),
+    R.ask<SynthSettings>(),
     R.map(({ sampleRate, rampTime, volume }) =>
       pipe(
         RNA.range(0, Math.floor(duration * sampleRate)),
@@ -111,7 +114,7 @@ const renderToneEnvelope = (duration: number) =>
 
 const renderSilenceEnvelope = (duration: number) =>
   pipe(
-    R.ask<AudioSettings>(),
+    R.ask<SynthSettings>(),
     R.map(({ sampleRate }) => RNA.replicate(0)(Math.floor(duration * sampleRate))),
   );
 
@@ -128,52 +131,40 @@ const renderSynthEnvelope = (tt: PulseTrain) =>
     R.map(RNA.flatten),
   );
 
-const padSampleData = (data: RNA.ReadonlyNonEmptyArray<number>) =>
-  pipe(
-    R.ask<AudioSettings>(),
-    R.chain(({ padTime }) =>
-      pipe(
-        renderSilenceEnvelope(padTime),
-        R.map((se) => pipe(se, RNA.concat(data), RNA.concat(se))),
-      ),
-    ),
-  );
+const padEnvelope =
+  (n: number) =>
+  (data: SynthEnvelope): SynthEnvelope =>
+    pipe(RNA.replicate(0)(n), (p) => pipe(p, RNA.concat(data), RNA.concat(p)));
 
-const pcmDataFromSynthEnvelope = (envelope: SynthEnvelope) =>
-  pipe(
-    R.ask<AudioSettings>(),
-    R.map(({ bitRate, freq, sampleRate }) =>
-      pipe(
-        envelope,
-        RNA.mapWithIndex((idx, i) => i * Math.sin((2 * Math.PI * freq * idx) / sampleRate)),
-        RNA.map((i) => Math.round(i * ((1 << (bitRate - 1)) - 1))),
-      ),
-    ),
-  );
+const pcmFromSynthEnvelope =
+  (freq: number, sampleRate: SampleRate, bitDepth: BitDepth) =>
+  (data: SynthEnvelope): SynthEnvelope =>
+    pipe(
+      data,
+      RNA.mapWithIndex((idx, i) => i * Math.sin((2 * Math.PI * freq * idx) / sampleRate)),
+      RNA.map((i) => Math.round(i * ((1 << (bitDepth - 1)) - 1))),
+    );
 
-export const renderSynthSample = (m: AstEntity): R.Reader<AudioSettings & CwTimings, SynthSample> =>
+export const renderSynthSample = (pt: PulseTrain): R.Reader<SynthSettings, SynthSample> =>
   pipe(
-    R.ask<AudioSettings & CwTimings>(),
+    R.ask<SynthSettings>(),
     R.map((settings) => ({
       freq: settings.freq,
       sampleRate: settings.sampleRate,
-      envelope: pipe(m, buildPulseTrain, R.chainW(renderSynthEnvelope), R.chainW(padSampleData), apply(settings)),
+      envelope: pipe(renderSynthEnvelope(pt)(settings), padEnvelope(settings.sampleRate * settings.padTime)),
     })),
   );
 
-export const renderAudioSample = (m: AstEntity): R.Reader<AudioSettings & CwTimings, AudioSample> =>
+export const pcmFromSynth = ({
+  freq,
+  sampleRate,
+  envelope,
+}: SynthSample): R.Reader<QuantizationSettings, AudioSample> =>
   pipe(
-    R.ask<AudioSettings & CwTimings>(),
-    R.map((settings) => ({
-      bitRate: settings.bitRate,
-      sampleRate: settings.sampleRate,
-      data: pipe(
-        m,
-        buildPulseTrain,
-        R.chainW(renderSynthEnvelope),
-        R.chainW(padSampleData),
-        R.chainW(pcmDataFromSynthEnvelope),
-        apply(settings),
-      ),
+    R.ask<QuantizationSettings>(),
+    R.map(({ bitDepth }) => ({
+      bitDepth,
+      sampleRate,
+      data: pcmFromSynthEnvelope(freq, sampleRate, bitDepth)(envelope),
     })),
   );
