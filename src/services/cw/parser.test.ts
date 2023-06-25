@@ -2,7 +2,7 @@ import { readerEither as RE, reader as R } from 'fp-ts';
 import { pipe, apply } from 'fp-ts/function';
 
 import { parseTextStr, parseCodeStr, DEFAULT_PARSE_TEXT_SETTINGS, DEFAULT_PARSE_CODE_SETTINGS } from './parser';
-import { calculateTimings, pcmFromSynth, renderSynthSample, buildPulseTrain } from './render';
+import { calculateTimings, renderSynthSample, buildPulseTrain, synthSampleToPcm } from './render';
 
 describe('ToneSeq', () => {
   it('decodes valid text with prosigns', () => {
@@ -11,7 +11,7 @@ describe('ToneSeq', () => {
       parseTextStr,
       RE.chainReaderKW(buildPulseTrain),
       RE.chainReaderKW(renderSynthSample),
-      RE.chainReaderKW(pcmFromSynth),
+      RE.chainReaderKW(synthSampleToPcm),
       RE.map((s) => s.data.join(' ')),
       RE.match(
         (e) => `Expected: ${e.expected} (idx: ${e.idx})`,
