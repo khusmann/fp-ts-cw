@@ -1,10 +1,11 @@
 import { AVPlaybackStatus, Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { taskEither as TE, readerTaskEither as RTE } from 'fp-ts';
+import { taskEither as TE, readerTaskEither as RTE, reader as R } from 'fp-ts';
 import { pipe, flow } from 'fp-ts/function';
 import { WaveFile } from 'wavefile';
 
-import { AudioSample } from './render';
+import { renderSynthSample, synthSampleToPcm } from './render';
+import type { AudioSample } from './render';
 import { constantSamples } from './util';
 
 export type OnFinishedSetting = {
@@ -69,7 +70,14 @@ const playPlayer = (player: Audio.Sound) =>
     TE.chain(leftIfAVPlaybackError),
   );
 
-export const playAudioSample = flow(writeTempFile, RTE.chainW(createPlayer), RTE.tapTaskEither(playPlayer));
+const playAudioSample = flow(writeTempFile, RTE.chainW(createPlayer), RTE.tapTaskEither(playPlayer));
+
+export const playPulseTrain = flow(
+  renderSynthSample,
+  R.chainW(synthSampleToPcm),
+  RTE.fromReader,
+  RTE.chainW(playAudioSample),
+);
 
 //import { createMachine, interpret } from 'xstate';
 // State machine definition
