@@ -1,6 +1,6 @@
 import { AVPlaybackStatus, Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { taskEither as TE, readerTaskEither as RTE, reader as R } from 'fp-ts';
+import { taskEither as TE, readerTaskEither as RTE, reader as R, readonlyRecord as RR } from 'fp-ts';
 import { pipe, flow } from 'fp-ts/function';
 import { WaveFile } from 'wavefile';
 
@@ -49,6 +49,27 @@ const writeTempFile = ({ sampleRate, bitDepth, data }: AudioSample) =>
     }),
   );
 
+type AudioPlayer = {
+  readonly play: TE.TaskEither<PlayerError, void>;
+  readonly stop: TE.TaskEither<PlayerError, void>;
+  readonly unload: TE.TaskEither<PlayerError, void>;
+};
+
+const playerFromSoundObject = ({ sound }: Audio.SoundObject): AudioPlayer =>
+  pipe(
+    {
+      play: async () => await sound.playAsync(), // Audio.Sound uses weird mixins, so we need to use the ugly async/await syntax
+      stop: async () => await sound.stopAsync(), // (instead of just sound.stopAsync())
+      unload: async () => await sound.unloadAsync(),
+    },
+    RR.map((t) =>
+      pipe(
+        TE.tryCatch(t, (e) => playerError(String(e))),
+        TE.chainW((s) => (s.isLoaded ? TE.right(undefined) : TE.left(playerError(s.error ?? 'Unknown error')))),
+      ),
+    ),
+  );
+
 const createPlayer =
   (uri: string) =>
   ({ onFinished }: OnFinishedSetting) =>
@@ -57,54 +78,14 @@ const createPlayer =
         () => Audio.Sound.createAsync({ uri }, {}, (s) => s.isLoaded && s.didJustFinish && onFinished()),
         (e) => playerError(String(e)),
       ),
-      TE.map(({ sound }: Audio.SoundObject) => sound),
+      TE.map(playerFromSoundObject),
     );
 
-const leftIfAVPlaybackError = (status: AVPlaybackStatus) =>
-  status.isLoaded ? TE.right(status) : TE.left(playerError(status.error ?? 'Unknown error'));
+const playerFromSample = flow(writeTempFile, RTE.chainW(createPlayer));
 
-const playPlayer = (player: Audio.Sound) =>
-  pipe(
-    TE.tryCatch(
-      async () => await player.playAsync(),
-      (e) => playerError(String(e)),
-    ),
-    TE.chain(leftIfAVPlaybackError),
-  );
-
-const playAudioSample = flow(writeTempFile, RTE.chainW(createPlayer), RTE.tapTaskEither(playPlayer));
-
-export const playPulseTrain = flow(
+export const playerFromPulseTrain = flow(
   renderSynthSample,
   R.chainW(synthSampleToPcm),
   RTE.fromReader,
-  RTE.chainW(playAudioSample),
+  RTE.chainW(playerFromSample),
 );
-
-//import { createMachine, interpret } from 'xstate';
-// State machine definition
-// machine.transition(...) is a pure function used by the interpreter.
-//const playerMachine = createMachine({
-//  /** @xstate-layout N4IgpgJg5mDOIC5QAcA2BDAnmATgOgEsA7AgFwGIAlAUQEEARATQG0AGAXURQHtYyDuRLiAAeiALQBGVpLwBmAOwAWVnICcrJXIBMS7QrkAaEJkQA2BXgXWFADh0BWVmskO3AX3fG0WXIQioYOQACgAytCwcwsi8-ILCYghmtngOutq2DpJqDuqsZmrGpgiSeni2ktaKcrZmrFlm2p7eGNj4qNzoEMRQ5BCCYIREAG7cANaDsKToOKTBrbhsnEggMXykAkIriXJ1qclZSjlqNWraRYilSvLakmZaydoyBUrNqwvtnd1Evbg43PgfKQAGYAgC2eCmMzmHyW0ViG3i20Q2jM8hUR0ymkamVsSguCF0sm0JMkclUFhyGTePjaeFpPXIAGUACoAeWCcJWaziW1AiSUmTwajUyWUtTUtgUWQJKlY5UlelOdlUkhpH3prUZ9DZADlqFyeOtNgkUeT5GZSmZdgUZOoFATyXJUko3JbpS41ApSurfPgptxkMhGf0iINiKMJpDSIH5n7DasESbkQhxCc8EolJJMkpGpp8mZHfU8Jo1LnbPUHHKFL66QGg4y-gDNegQeDo7HYVFuUmkfyJGcrN7USTnLkKrLWCky6KybsnvYfW8iNwIHBoh94ca+6IJK40dIHBVWFO5OpboUTBIpRmztntHI3LmHI1a35iGQt7zTanpClD8ep7ntkBLiPKdoyJmHqaFmGSCm++AEAEYBfoifK7r+U54AB0hAXel7FKU2jlJo3qVIKFhyHcCF4B0XQ9Khyb9iUkpWKUchKAojRZOktgEpI2Q3HcijWFWujqDRDI-IxO4CsoeBPGYTgiuJZJVkWzq5NoVbONpuaKGYNH1sG0k9tu6GJOkGYWPUub3NaXqOtYGasA+nHkrYFaZp4nhAA */
-//  id: 'player',
-//  initial: 'init',
-//  context: {},
-//  states: {
-//    init: { on: { READY: 'idle' } },
-//    idle: { on: { PLAY: 'loading' } },
-//    loading: { invoke: { id: 'startPlayer', src: async (context, event) => {}, onDone: 'playing', onError: 'idle' } },
-//    playing: { on: { STOP: 'stopping', DONE: 'idle' } },
-//    stopping: { invoke: { id: 'stopPlayer', src: async (context, event) => {}, onDone: 'idle', onError: 'idle' } },
-//  },
-//});
-
-// Machine instance with internal state
-//const toggleActor = interpret(playerMachine);
-//toggleActor.subscribe((state) => console.log(state.value));
-//toggleActor.start();
-// => logs 'inactive'
-
-//toggleActor.send({ type: 'TOGGLE' });
-// => logs 'active'
-
-//toggleActor.send({ type: 'TOGGLE' });

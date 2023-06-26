@@ -1,1 +1,1 @@
-export { playMessage } from './api';
+export { audioPlayerFromMessage } from './api';
