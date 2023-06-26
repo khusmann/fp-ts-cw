@@ -16,22 +16,26 @@ export const RNAintersperseW =
   (b: RNA.ReadonlyNonEmptyArray<B>) =>
     RNA.intersperse<A | B>(a)(b);
 
-const toneShapeFn = (t: number, rampTime: number) =>
-  t < rampTime ? Math.pow(Math.sin((Math.PI * t) / (2 * rampTime)), 2) : 1;
+const toneShapeFn = (rampTime: number) => (t: number, v: number) =>
+  v * (t < rampTime ? Math.pow(Math.sin((Math.PI * t) / (2 * rampTime)), 2) : 1);
 
-const timeSeries = (duration: number, sampleRate: number) =>
-  RNA.range(0, Math.floor(duration * sampleRate) / sampleRate);
+export const modulatedSineFn = (freq: number) => (t: number, v: number) => v * Math.sin(2 * Math.PI * freq * t);
+
+export const RNAmapWithTimeIdx =
+  (sampleRate: number) =>
+  <A, B>(f: (t: number, a: A) => B) =>
+    RNA.mapWithIndex<A, B>((idx, v) => f(idx / sampleRate, v));
 
 export const toneEnvelope = (duration: number, volume: number, rampTime: number, sampleRate: number) =>
   pipe(
-    timeSeries(duration, sampleRate),
-    RNA.map((t) => toneShapeFn(t, rampTime) * toneShapeFn(duration - t, rampTime) * volume),
+    constantSamples(volume)(duration, sampleRate),
+    RNAmapWithTimeIdx(sampleRate)(toneShapeFn(rampTime)),
+    RNAmapWithTimeIdx(sampleRate)((t, v) => toneShapeFn(rampTime)(duration - t, v)),
   );
 
-export const silenceEnvelope = (duration: number, sampleRate: number) =>
-  RNA.replicate(0)(Math.floor(duration * sampleRate));
+export const constantSamples = (v: number) => (duration: number, sampleRate: number) =>
+  RNA.replicate(v)(Math.floor(duration * sampleRate));
 
-export const modulatedSineFn = (freq: number, sampleRate: number) => (idx: number, v: number) =>
-  v * Math.sin((2 * Math.PI * freq * idx) / sampleRate);
+export const silenceEnvelope = constantSamples(0);
 
 export const quantize = (bitDepth: number) => (v: number) => Math.round(v * ((1 << (bitDepth - 1)) - 1));

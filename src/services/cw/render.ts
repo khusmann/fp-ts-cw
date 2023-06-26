@@ -4,7 +4,7 @@ import { pipe, flow } from 'fp-ts/function';
 import { match, P } from 'ts-pattern';
 
 import type { AstEntity } from './ast';
-import { silenceEnvelope, toneEnvelope, quantize as quantizeFn, modulatedSineFn } from './util';
+import { silenceEnvelope, toneEnvelope, quantize, modulatedSineFn, RNAmapWithTimeIdx } from './util';
 
 export type CwSettings = {
   readonly wpm: number;
@@ -154,7 +154,7 @@ export const synthSampleToPcm = ({ freq, sampleRate, envelope }: SynthSample) =>
   pipe(
     R.ask<BitDepthSetting>(),
     R.map(({ bitDepth }) =>
-      pipe(envelope, RNA.mapWithIndex(modulatedSineFn(freq, sampleRate)), RNA.map(quantizeFn(bitDepth))),
+      pipe(envelope, RNAmapWithTimeIdx(sampleRate)(modulatedSineFn(freq)), RNA.map(quantize(bitDepth))),
     ),
     R.bindTo('data'),
     R.bind('sampleRate', () => R.of(sampleRate)),
