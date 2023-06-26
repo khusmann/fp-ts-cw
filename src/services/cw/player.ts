@@ -52,10 +52,12 @@ const writeTempFile = ({ sampleRate, bitDepth, data }: AudioSample) =>
 const createPlayer =
   (uri: string) =>
   ({ onFinished }: OnFinishedSetting) =>
-    TE.tryCatch(
-      async () =>
-        (await Audio.Sound.createAsync({ uri }, {}, (s) => s.isLoaded && s.didJustFinish && onFinished())).sound,
-      (e) => playerError(String(e)),
+    pipe(
+      TE.tryCatch(
+        () => Audio.Sound.createAsync({ uri }, {}, (s) => s.isLoaded && s.didJustFinish && onFinished()),
+        (e) => playerError(String(e)),
+      ),
+      TE.map(({ sound }: Audio.SoundObject) => sound),
     );
 
 const leftIfAVPlaybackError = (status: AVPlaybackStatus) =>
@@ -64,7 +66,7 @@ const leftIfAVPlaybackError = (status: AVPlaybackStatus) =>
 const playPlayer = (player: Audio.Sound) =>
   pipe(
     TE.tryCatch(
-      async () => player.playAsync(),
+      async () => await player.playAsync(),
       (e) => playerError(String(e)),
     ),
     TE.chain(leftIfAVPlaybackError),
