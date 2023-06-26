@@ -1,0 +1,1 @@
+export { playMessage } from './api';

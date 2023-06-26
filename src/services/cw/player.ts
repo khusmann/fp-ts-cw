@@ -1,83 +1,75 @@
-import * as R from 'fp-ts/Reader';
-import * as RT from 'fp-ts/ReaderTask';
-import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
-import * as T from 'fp-ts/Task';
-import { pipe } from 'fp-ts/function';
+import { AVPlaybackStatus, Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
+import { taskEither as TE, readerTaskEither as RTE } from 'fp-ts';
+import { pipe, flow } from 'fp-ts/function';
+import { WaveFile } from 'wavefile';
 
-import * as ast from './ast';
+import { AudioSample } from './render';
+import { constantSamples } from './util';
 
-type ParseSettings = {
-  foo: string;
+export type OnFinishedSetting = {
+  readonly onFinished: () => void;
 };
 
-const parseMessage = (message: string): R.Reader<ParseSettings, ast.Message> =>
-  pipe(
-    R.ask<ParseSettings>(),
-    R.map(() => ast.message([ast.WORD_SPACE])),
-  );
-
-type ToneEnvelope = {
-  bitRate: 16 | 24;
-  sampleRate: 8000 | 16000 | 32000 | 44100 | 48000;
-  freq: number;
-  data: RNA.ReadonlyNonEmptyArray<number>;
+export type PadTimeSetting = {
+  readonly padTime: number;
 };
 
-const envelopeFromAst = (message: ast.Message): R.Reader<ast.CwSettings & ast.AudioSettings, ToneEnvelope> =>
-  pipe(
-    R.ask<ast.CwSettings>(),
-    R.map(() => ({ bitRate: 16, sampleRate: 8000, freq: 700, data: [0] })),
-  );
-
-type Pcm = {
-  bitRate: 16 | 24;
-  sampleRate: 8000 | 16000 | 32000 | 44100 | 48000;
-  data: RNA.ReadonlyNonEmptyArray<number>;
+export type PlayerError = {
+  readonly _tag: 'PlayerError';
+  readonly message: string;
 };
 
-const pcmFromEnvelope = (envelope: ToneEnvelope): Pcm => ({
-  bitRate: envelope.bitRate,
-  sampleRate: envelope.sampleRate,
-  data: envelope.data,
-});
-
-type PlayerConfig = {
-  onFinished: () => void;
+export type FileSystemError = {
+  readonly _tag: 'FileSystemError';
+  readonly message: string;
 };
 
-const playPcm =
-  (pcm: Pcm): T.Task<number> =>
-  async () => {
-    console.log('playing pcm: ', pcm);
-    return 0;
-  };
+const filesystemError = (message: string): FileSystemError => ({ _tag: 'FileSystemError', message });
+const playerError = (message: string): PlayerError => ({ _tag: 'PlayerError', message });
 
-const doSomething = (i: number): R.Reader<PlayerConfig, number> =>
+const writeTempFile = ({ sampleRate, bitDepth, data }: AudioSample) =>
   pipe(
-    R.ask<PlayerConfig>(),
-    R.map(() => 0),
+    RTE.ask<PadTimeSetting>(),
+    RTE.chainTaskEitherKW(({ padTime }) => {
+      const pad = constantSamples(0)(padTime, sampleRate);
+      const tempfile = FileSystem.cacheDirectory + 'temp.wav';
+
+      const wav = new WaveFile();
+      wav.fromScratch(1, sampleRate, bitDepth.toString(), [...pad, ...data, ...pad]);
+
+      return TE.tryCatch<FileSystemError, string>(
+        async () => {
+          await FileSystem.writeAsStringAsync(tempfile, wav.toBase64(), { encoding: FileSystem.EncodingType.Base64 });
+          return tempfile;
+        },
+        (e) => filesystemError(String(e)),
+      );
+    }),
   );
 
-export const playMessage = (message: string) =>
+const createPlayer =
+  (uri: string) =>
+  ({ onFinished }: OnFinishedSetting) =>
+    TE.tryCatch(
+      async () =>
+        (await Audio.Sound.createAsync({ uri }, {}, (s) => s.isLoaded && s.didJustFinish && onFinished())).sound,
+      (e) => playerError(String(e)),
+    );
+
+const leftIfAVPlaybackError = (status: AVPlaybackStatus) =>
+  status.isLoaded ? TE.right(status) : TE.left(playerError(status.error ?? 'Unknown error'));
+
+const playPlayer = (player: Audio.Sound) =>
   pipe(
-    message,
-    parseMessage,
-    R.chainW(envelopeFromAst),
-    R.map(pcmFromEnvelope),
-    RT.fromReader,
-    RT.flatMapTask(playPcm),
-    RT.map(doSomething),
+    TE.tryCatch(
+      async () => player.playAsync(),
+      (e) => playerError(String(e)),
+    ),
+    TE.chain(leftIfAVPlaybackError),
   );
 
-export const playMessage2 = (message: string) =>
-  pipe(
-    message,
-    parseMessage,
-    R.chainW(envelopeFromAst),
-    RT.fromReader,
-    RT.flatMapTask(playPcm),
-    RT.chainReaderKW(doSomething),
-  );
+export const playAudioSample = flow(writeTempFile, RTE.chainW(createPlayer), RTE.tapTaskEither(playPlayer));
 
 //import { createMachine, interpret } from 'xstate';
 // State machine definition

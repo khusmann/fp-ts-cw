@@ -1,22 +1,22 @@
 import * as R from 'fp-ts/Reader';
 import * as RNA from 'fp-ts/ReadonlyNonEmptyArray';
-import { pipe, flow } from 'fp-ts/function';
+import { pipe } from 'fp-ts/function';
 import { match, P } from 'ts-pattern';
 
 import type { AstEntity } from './ast';
-import { silenceEnvelope, toneEnvelope, quantize, modulatedSineFn, RNAmapWithTimeIdx } from './util';
+import { constantSamples } from './util';
 
-export type CwSettings = {
+export type WpmSettings = {
   readonly wpm: number;
   readonly farnsworth: number;
   readonly ews: number;
 };
 
-type CwTimings = {
-  readonly dit: number;
-  readonly dah: number;
-  readonly tokenSpace: number;
-  readonly wordSpace: number;
+type TimingSettings = {
+  readonly dotTime: number;
+  readonly dashTime: number;
+  readonly tokenSpaceTime: number;
+  readonly wordSpaceTime: number;
 };
 
 type SampleRate = 8000 | 16000 | 32000 | 44100 | 48000;
@@ -32,10 +32,6 @@ export type VolumeSetting = {
 
 export type FreqSetting = {
   readonly freq: number;
-};
-
-export type PadTimeSetting = {
-  readonly padTime: number;
 };
 
 export type SampleRateSetting = {
@@ -60,7 +56,7 @@ type PulseTrain = RNA.ReadonlyNonEmptyArray<Tone | Silence>;
 
 type SynthEnvelope = RNA.ReadonlyNonEmptyArray<number>;
 
-type SynthSample = {
+export type SynthSample = {
   readonly freq: number;
   readonly sampleRate: SampleRate;
   readonly envelope: SynthEnvelope;
@@ -78,51 +74,57 @@ const tone = (duration: number): Tone => ({ _tag: 'tone', duration });
 
 const silence = (duration: number): Silence => ({ _tag: 'silence', duration });
 
-export const calculateTimings = ({ wpm, farnsworth, ews }: CwSettings): CwTimings => {
-  const dit = 1.2 / wpm;
-  const dah = 3 * dit;
-  const fdit = (60 - farnsworth * 31 * dit) / (farnsworth * (12 + 7));
-  const tokenSpace = farnsworth ? 3 * fdit : 3 * dit;
-  const wordSpace = 7 * (ews + 1) * (farnsworth ? fdit : dit);
+export const calculateTimings = ({ wpm, farnsworth, ews }: WpmSettings): TimingSettings => {
+  const dotTime = 1.2 / wpm;
+  const dashTime = 3 * dotTime;
+  const fdit = (60 - farnsworth * 31 * dotTime) / (farnsworth * (12 + 7));
+  const tokenSpaceTime = farnsworth ? 3 * fdit : 3 * dotTime;
+  const wordSpaceTime = 7 * (ews + 1) * (farnsworth ? fdit : dotTime);
   return {
-    dit,
-    dah,
-    tokenSpace,
-    wordSpace,
+    dotTime,
+    dashTime,
+    tokenSpaceTime,
+    wordSpaceTime,
   };
 };
 
-export const buildPulseTrain = (m: AstEntity): R.Reader<CwTimings, PulseTrain> =>
+export const buildPulseTrain = (m: AstEntity): R.Reader<TimingSettings, PulseTrain> =>
   pipe(
-    R.ask<CwTimings>(),
-    R.chain((timings) =>
+    R.ask<TimingSettings>(),
+    R.chain(({ dotTime, dashTime, tokenSpaceTime, wordSpaceTime }) =>
       match(m)
         .with(
           P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'character' }, { _tag: 'prosign' }),
           ({ children }) => pipe(children, RNA.map(buildPulseTrain), RNA.sequence(R.Applicative), R.map(RNA.flatten)),
         )
-        .with({ _tag: 'dot' }, () => R.of(RNA.of(tone(timings.dit))))
-        .with({ _tag: 'dash' }, () => R.of(RNA.of(tone(timings.dah))))
-        .with({ _tag: 'tonespace' }, () => R.of(RNA.of(silence(timings.dit))))
-        .with({ _tag: 'tokenspace' }, () => R.of(RNA.of(silence(timings.tokenSpace))))
-        .with({ _tag: 'wordspace' }, () => R.of(RNA.of(silence(timings.wordSpace))))
+        .with({ _tag: 'dot' }, () => R.of(RNA.of(tone(dotTime))))
+        .with({ _tag: 'dash' }, () => R.of(RNA.of(tone(dashTime))))
+        .with({ _tag: 'tonespace' }, () => R.of(RNA.of(silence(dotTime))))
+        .with({ _tag: 'tokenspace' }, () => R.of(RNA.of(silence(tokenSpaceTime))))
+        .with({ _tag: 'wordspace' }, () => R.of(RNA.of(silence(wordSpaceTime))))
         .exhaustive(),
     ),
   );
 
-const renderToneEnvelope = (duration: number) =>
-  pipe(
-    R.ask<RampTimeSetting & VolumeSetting & SampleRateSetting>(),
-    R.map(({ sampleRate, rampTime, volume }) => toneEnvelope(duration, volume, rampTime, sampleRate)),
-  );
+const renderToneEnvelope =
+  (duration: number) =>
+  ({ sampleRate, rampTime, volume }: RampTimeSetting & VolumeSetting & SampleRateSetting) => {
+    const toneShapeFn = (t: number, v: number) =>
+      v * (t < rampTime ? Math.pow(Math.sin((Math.PI * t) / (2 * rampTime)), 2) : 1);
 
-const renderSilenceEnvelope = (duration: number) =>
-  pipe(
-    R.ask<SampleRateSetting>(),
-    R.map(({ sampleRate }) => silenceEnvelope(duration, sampleRate)),
-  );
+    return pipe(
+      constantSamples(volume)(duration, sampleRate),
+      RNA.mapWithIndex((idx, v) => toneShapeFn(idx / sampleRate, v)), // Attack
+      RNA.mapWithIndex((idx, v) => toneShapeFn(duration - (idx + 1) / sampleRate, v)), // Decay
+    );
+  };
 
-const renderSynthEnvelope = (tt: PulseTrain) =>
+const renderSilenceEnvelope =
+  (duration: number) =>
+  ({ sampleRate }: SampleRateSetting) =>
+    constantSamples(0)(duration, sampleRate);
+
+export const renderSynthSample = (tt: PulseTrain) =>
   pipe(
     tt,
     RNA.map((tone) =>
@@ -133,29 +135,24 @@ const renderSynthEnvelope = (tt: PulseTrain) =>
     ),
     RNA.sequence(R.Applicative),
     R.map(RNA.flatten),
+    R.bindTo('envelope'),
+    R.bindW('freq', () => R.asks(({ freq }: FreqSetting) => freq)),
+    R.bindW('sampleRate', () => R.asks(({ sampleRate }: SampleRateSetting) => sampleRate)),
   );
-
-const padSynthEnvelope =
-  (data: SynthEnvelope) =>
-  ({ sampleRate, padTime }: SampleRateSetting & PadTimeSetting) =>
-    pipe(silenceEnvelope(padTime, sampleRate), (p) => pipe(p, RNA.concat(data), RNA.concat(p)));
-
-type SynthSettings = FreqSetting & SampleRateSetting & RampTimeSetting & PadTimeSetting & VolumeSetting;
-
-export const renderSynthSample: (tt: PulseTrain) => R.Reader<SynthSettings, SynthSample> = flow(
-  renderSynthEnvelope,
-  R.chainW(padSynthEnvelope),
-  R.bindTo('envelope'),
-  R.bindW('freq', () => R.asks(({ freq }: FreqSetting) => freq)),
-  R.bindW('sampleRate', () => R.asks(({ sampleRate }: SampleRateSetting) => sampleRate)),
-);
 
 export const synthSampleToPcm = ({ freq, sampleRate, envelope }: SynthSample) =>
   pipe(
     R.ask<BitDepthSetting>(),
-    R.map(({ bitDepth }) =>
-      pipe(envelope, RNAmapWithTimeIdx(sampleRate)(modulatedSineFn(freq)), RNA.map(quantize(bitDepth))),
-    ),
+    R.map(({ bitDepth }) => {
+      const sineFn = (t: number, v: number) => v * Math.sin(2 * Math.PI * freq * t);
+      const quantizeFn = (v: number) => Math.round(v * ((1 << (bitDepth - 1)) - 1));
+
+      return pipe(
+        envelope,
+        RNA.mapWithIndex((idx, v) => sineFn(idx / sampleRate, v)),
+        RNA.map(quantizeFn),
+      );
+    }),
     R.bindTo('data'),
     R.bind('sampleRate', () => R.of(sampleRate)),
     R.bind('bitDepth', () => R.asks(({ bitDepth }: BitDepthSetting) => bitDepth)),
