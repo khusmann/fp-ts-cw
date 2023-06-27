@@ -55,4 +55,8 @@ const playerFromSynthSampleImpl =
     );
   };
 
+export const DEFAULT_PLAYER_SETTINGS: PadTimeSetting = {
+  padTime: 0.05,
+};
+
 export const playerFromSynthSample: PlayerFromSynthSampleAPI = RTE.fromReaderK(playerFromSynthSampleImpl);
