@@ -1,13 +1,12 @@
 /* istanbul ignore file */
-import { taskEither as TE, readerTaskEither as RTE, reader as R, readonlyRecord as RR } from 'fp-ts';
-import { flow, pipe } from 'fp-ts/function';
+import { taskEither as TE, readerTaskEither as RTE, readonlyRecord as RR } from 'fp-ts';
+import { pipe } from 'fp-ts/function';
 
-import type { AudioPlayer, OnFinishedSetting, PadTimeSetting, PlayerFromPulseTrainAPI } from './player';
-import { renderSynthSample } from './render';
+import type { AudioPlayer, OnFinishedSetting, PadTimeSetting, PlayerFromSynthSampleAPI } from './player';
 import type { SynthSample } from './render';
 import { constantSamples } from './util';
 
-const playerFromSynthSample =
+const playerFromSynthSampleImpl =
   ({ freq, sampleRate, envelope }: SynthSample) =>
   ({ onFinished, padTime }: OnFinishedSetting & PadTimeSetting): AudioPlayer => {
     const pad = constantSamples(0)(padTime, sampleRate);
@@ -58,8 +57,4 @@ const playerFromSynthSample =
 
 export { DEFAULT_PLAYER_SETTINGS } from './player';
 
-export const playerFromPulseTrain: PlayerFromPulseTrainAPI = flow(
-  renderSynthSample,
-  R.chainW(playerFromSynthSample),
-  RTE.fromReader,
-);
+export const playerFromSynthSample: PlayerFromSynthSampleAPI = RTE.fromReaderK(playerFromSynthSampleImpl);

@@ -1,11 +1,11 @@
 /* istanbul ignore file */
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { taskEither as TE, readerTaskEither as RTE, reader as R, readonlyRecord as RR, identity as I } from 'fp-ts';
+import { taskEither as TE, readerTaskEither as RTE, readonlyRecord as RR, identity as I } from 'fp-ts';
 import { pipe, flow } from 'fp-ts/function';
 import { WaveFile } from 'wavefile';
 
-import { renderSynthSample, synthSampleToPcm } from './render';
+import { synthSampleToPcm } from './render';
 import type { AudioSample } from './render';
 import { constantSamples } from './util';
 
@@ -96,11 +96,6 @@ const createPlayer =
 
 const playerFromSample = flow(writeTempFile, RTE.chainW(createPlayer));
 
-export const playerFromPulseTrain = flow(
-  renderSynthSample,
-  R.chainW(synthSampleToPcm),
-  RTE.fromReader,
-  RTE.chainW(playerFromSample),
-);
+export const playerFromSynthSample = flow(RTE.fromReaderK(synthSampleToPcm), RTE.chainW(playerFromSample));
 
-export type PlayerFromPulseTrainAPI = typeof playerFromPulseTrain;
+export type PlayerFromSynthSampleAPI = typeof playerFromSynthSample;
