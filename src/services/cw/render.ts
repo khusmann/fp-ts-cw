@@ -48,19 +48,19 @@ export type BitDepthSetting = {
   readonly bitDepth: BitDepth;
 };
 
-type Tone = {
+export type Tone = {
   readonly _tag: 'tone';
   readonly duration: number;
 };
 
-type Silence = {
+export type Silence = {
   readonly _tag: 'silence';
   readonly duration: number;
 };
 
-type PulseTrain = RNA.ReadonlyNonEmptyArray<Tone | Silence>;
+export type PulseTrain = RNA.ReadonlyNonEmptyArray<Tone | Silence>;
 
-type SynthEnvelope = RNA.ReadonlyNonEmptyArray<number>;
+export type SynthEnvelope = RNA.ReadonlyNonEmptyArray<number>;
 
 export type SynthSample = {
   readonly freq: number;
@@ -68,7 +68,7 @@ export type SynthSample = {
   readonly envelope: SynthEnvelope;
 };
 
-type PcmData = RNA.ReadonlyNonEmptyArray<number>;
+export type PcmData = RNA.ReadonlyNonEmptyArray<number>;
 
 export type AudioSample = {
   readonly sampleRate: SampleRate;
@@ -76,9 +76,9 @@ export type AudioSample = {
   readonly data: PcmData;
 };
 
-const tone = (duration: number): Tone => ({ _tag: 'tone', duration });
+export const tone = (duration: number): Tone => ({ _tag: 'tone', duration });
 
-const silence = (duration: number): Silence => ({ _tag: 'silence', duration });
+export const silence = (duration: number): Silence => ({ _tag: 'silence', duration });
 
 export const calculateTimings = ({ wpm, farnsworth, ews }: WpmSettings): TimingSettings => {
   const dotTime = 1.2 / wpm;
