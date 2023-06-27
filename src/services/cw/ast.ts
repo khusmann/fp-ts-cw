@@ -113,10 +113,10 @@ export const stringifyCode = (m: AstEntity): string =>
     .with({ _tag: 'wordspace' }, () => ' / ')
     .exhaustive();
 
-export const stringifyTones = (m: AstEntity) =>
+export const stringifyTones = (m: AstEntity): string =>
   match(m)
     .with(P.union({ _tag: 'message' }, { _tag: 'word' }, { _tag: 'character' }, { _tag: 'prosign' }), ({ children }) =>
-      children.map(stringifyCode).join(''),
+      children.map(stringifyTones).join(''),
     )
     .with({ _tag: 'dot' }, () => '.')
     .with({ _tag: 'dash' }, () => '-')

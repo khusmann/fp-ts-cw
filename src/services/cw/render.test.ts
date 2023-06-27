@@ -1,10 +1,21 @@
 import { pipe, apply } from 'fp-ts/function';
 
-import * as ast from './ast';
+import { message, word, CW_TOKEN_LOOKUP, TOKEN_SPACE, WORD_SPACE } from './ast';
 import { calculateTimings, renderSynthSample, tone, silence, buildPulseTrain, synthSampleToPcm } from './render';
 
 describe('calculateTimings', () => {
   it('calculates timings', () => {
+    const wpm = 20;
+    const farnsworth = 0;
+    const ews = 1;
+    const result = calculateTimings({ wpm, farnsworth, ews });
+    expect(result.dotTime).toBeCloseTo(0.06);
+    expect(result.dashTime).toBeCloseTo(0.18);
+    expect(result.tokenSpaceTime).toBeCloseTo(0.18);
+    expect(result.wordSpaceTime).toBeCloseTo(0.84);
+  });
+
+  it('calculates farnsworth timings', () => {
     const wpm = 20;
     const farnsworth = 10;
     const ews = 1;
@@ -23,7 +34,7 @@ describe('buildPulseTrain', () => {
     const tokenSpaceTime = 3;
     const wordSpaceTime = 4;
     const result = pipe(
-      ast.message([ast.word([ast.CW_TOKEN_LOOKUP['A'], ast.TOKEN_SPACE, ast.CW_TOKEN_LOOKUP['E']]), ast.WORD_SPACE]),
+      message([word([CW_TOKEN_LOOKUP['A'], TOKEN_SPACE, CW_TOKEN_LOOKUP['E']]), WORD_SPACE]),
       buildPulseTrain,
       apply({ dotTime, dashTime, tokenSpaceTime, wordSpaceTime }),
     );

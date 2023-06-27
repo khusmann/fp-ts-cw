@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 import { taskEither as TE, readerTaskEither as RTE, reader as R, readonlyRecord as RR } from 'fp-ts';
 import { flow, pipe } from 'fp-ts/function';
 

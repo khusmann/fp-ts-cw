@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 import { readerEither as RE, readerTaskEither as RTE } from 'fp-ts';
 import { flow } from 'fp-ts/function';
 

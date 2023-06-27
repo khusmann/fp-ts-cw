@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { taskEither as TE, readerTaskEither as RTE, reader as R, readonlyRecord as RR, identity as I } from 'fp-ts';
