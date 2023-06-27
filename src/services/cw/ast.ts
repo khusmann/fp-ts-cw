@@ -76,13 +76,13 @@ const pulsesFromCode = flow(
 const tokenFromCode = (str: string, code: string): Token =>
   str.length === 1 ? character(str, pulsesFromCode(code)) : prosign(str, pulsesFromCode(code));
 
-export const CW_TOKEN_LOOKUP = pipe(
+const CW_TOKEN_LOOKUP = pipe(
   CW_SYMBOLS,
   RNA.map(([str, code]: (typeof CW_SYMBOLS)[number]) => [str, tokenFromCode(str, code)] as const),
   RR.fromEntries,
 );
 
-export const CW_CODE_LOOKUP = pipe(
+const CW_CODE_LOOKUP = pipe(
   CW_SYMBOLS,
   RNA.map(([str, code]: (typeof CW_SYMBOLS)[number]) => [code, tokenFromCode(str, code)] as const),
   RR.fromEntries,

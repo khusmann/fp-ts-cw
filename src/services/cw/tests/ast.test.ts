@@ -1,16 +1,24 @@
+import { option as O } from 'fp-ts';
+import { flow } from 'fp-ts/function';
+
 import {
   stringify,
   stringifyCode,
   stringifyTones,
   message,
   word,
-  CW_TOKEN_LOOKUP,
   TOKEN_SPACE,
   WORD_SPACE,
+  lookupTokenFromText,
 } from '../ast';
 
 describe('stringify', () => {
-  const m = message([word([CW_TOKEN_LOOKUP['A'], TOKEN_SPACE, CW_TOKEN_LOOKUP['E']]), WORD_SPACE]);
+  const lookup = flow(
+    lookupTokenFromText,
+    O.getOrElseW(() => TOKEN_SPACE),
+  );
+
+  const m = message([word([lookup('A'), TOKEN_SPACE, lookup('E')]), WORD_SPACE]);
 
   it('outputs tokens', () => expect(stringify(m)).toBe('AE '));
 

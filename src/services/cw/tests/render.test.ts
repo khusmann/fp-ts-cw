@@ -1,6 +1,7 @@
-import { pipe, apply } from 'fp-ts/function';
+import { option as O } from 'fp-ts';
+import { pipe, flow, apply } from 'fp-ts/function';
 
-import { message, word, CW_TOKEN_LOOKUP, TOKEN_SPACE, WORD_SPACE } from '../ast';
+import { message, word, lookupTokenFromText, TOKEN_SPACE, WORD_SPACE } from '../ast';
 import { calculateTimings, renderSynthSample, tone, silence, buildPulseTrain, synthSampleToPcm } from '../render';
 
 describe('calculateTimings', () => {
@@ -39,6 +40,11 @@ describe('calculateTimings', () => {
 });
 
 describe('buildPulseTrain', () => {
+  const lookup = flow(
+    lookupTokenFromText,
+    O.getOrElseW(() => TOKEN_SPACE),
+  );
+
   const dotTime = 1;
   const dashTime = 2;
   const tokenSpaceTime = 3;
@@ -46,7 +52,7 @@ describe('buildPulseTrain', () => {
 
   it('builds a pulse train from a message', () => {
     const result = pipe(
-      message([word([CW_TOKEN_LOOKUP['A'], TOKEN_SPACE, CW_TOKEN_LOOKUP['E']]), WORD_SPACE]),
+      message([word([lookup('A'), TOKEN_SPACE, lookup('E')]), WORD_SPACE]),
       buildPulseTrain,
       apply({ dotTime, dashTime, tokenSpaceTime, wordSpaceTime }),
     );
