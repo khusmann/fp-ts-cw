@@ -7,7 +7,7 @@ import {
   CW_TOKEN_LOOKUP,
   TOKEN_SPACE,
   WORD_SPACE,
-} from './ast';
+} from '../ast';
 
 describe('stringify', () => {
   const m = message([word([CW_TOKEN_LOOKUP['A'], TOKEN_SPACE, CW_TOKEN_LOOKUP['E']]), WORD_SPACE]);

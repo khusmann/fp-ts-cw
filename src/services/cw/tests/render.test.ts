@@ -1,7 +1,7 @@
 import { pipe, apply } from 'fp-ts/function';
 
-import { message, word, CW_TOKEN_LOOKUP, TOKEN_SPACE, WORD_SPACE } from './ast';
-import { calculateTimings, renderSynthSample, tone, silence, buildPulseTrain, synthSampleToPcm } from './render';
+import { message, word, CW_TOKEN_LOOKUP, TOKEN_SPACE, WORD_SPACE } from '../ast';
+import { calculateTimings, renderSynthSample, tone, silence, buildPulseTrain, synthSampleToPcm } from '../render';
 
 describe('calculateTimings', () => {
   it('calculates timings', () => {

@@ -1,8 +1,8 @@
 import { readerEither as RE } from 'fp-ts';
 import { apply, flow } from 'fp-ts/function';
 
-import { stringify } from './ast';
-import { parseTextStr, parseCodeStr, DEFAULT_PARSE_TEXT_SETTINGS, DEFAULT_PARSE_CODE_SETTINGS } from './parser';
+import { stringify } from '../ast';
+import { parseTextStr, parseCodeStr, DEFAULT_PARSE_TEXT_SETTINGS, DEFAULT_PARSE_CODE_SETTINGS } from '../parser';
 
 describe('parseText', () => {
   const parseText = flow(parseTextStr, RE.map(stringify), apply(DEFAULT_PARSE_TEXT_SETTINGS));
