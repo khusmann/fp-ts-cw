@@ -6,13 +6,19 @@ import { match, P } from 'ts-pattern';
 import type { AstEntity } from './ast';
 import { constantSamples } from './util';
 
+export const DEFAULT_AUDIO_SETTINGS: SampleRateSetting & BitDepthSetting & RampTimeSetting = {
+  sampleRate: 8000,
+  bitDepth: 16,
+  rampTime: 0.005, // Recommended by ARRL. See Section 2.202 of FCC rules and CCIR Radio regulations.
+};
+
 export type WpmSettings = {
   readonly wpm: number;
   readonly farnsworth: number;
   readonly ews: number;
 };
 
-type TimingSettings = {
+export type TimingSettings = {
   readonly dotTime: number;
   readonly dashTime: number;
   readonly tokenSpaceTime: number;

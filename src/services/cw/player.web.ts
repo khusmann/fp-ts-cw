@@ -55,6 +55,8 @@ const playerFromSynthSample =
     );
   };
 
+export { DEFAULT_PLAYER_SETTINGS } from './player';
+
 export const playerFromPulseTrain: PlayerFromPulseTrainAPI = flow(
   renderSynthSample,
   R.chainW(playerFromSynthSample),

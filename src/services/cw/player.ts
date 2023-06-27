@@ -8,6 +8,10 @@ import { renderSynthSample, synthSampleToPcm } from './render';
 import type { AudioSample } from './render';
 import { constantSamples } from './util';
 
+export const DEFAULT_PLAYER_SETTINGS: PadTimeSetting = {
+  padTime: 0.05,
+};
+
 export type OnFinishedSetting = {
   readonly onFinished: () => void;
 };
