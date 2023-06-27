@@ -1,6 +1,6 @@
-import { AVPlaybackStatus, Audio } from 'expo-av';
+import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { taskEither as TE, readerTaskEither as RTE, reader as R, readonlyRecord as RR } from 'fp-ts';
+import { taskEither as TE, readerTaskEither as RTE, reader as R, readonlyRecord as RR, identity as I } from 'fp-ts';
 import { pipe, flow } from 'fp-ts/function';
 import { WaveFile } from 'wavefile';
 
@@ -26,6 +26,12 @@ export type FileSystemError = {
   readonly message: string;
 };
 
+export type AudioPlayer = {
+  readonly play: TE.TaskEither<PlayerError, void>;
+  readonly stop: TE.TaskEither<PlayerError, void>;
+  readonly unload: TE.TaskEither<PlayerError, void>;
+};
+
 const filesystemError = (message: string): FileSystemError => ({ _tag: 'FileSystemError', message });
 const playerError = (message: string): PlayerError => ({ _tag: 'PlayerError', message });
 
@@ -49,23 +55,25 @@ const writeTempFile = ({ sampleRate, bitDepth, data }: AudioSample) =>
     }),
   );
 
-type AudioPlayer = {
-  readonly play: TE.TaskEither<PlayerError, void>;
-  readonly stop: TE.TaskEither<PlayerError, void>;
-  readonly unload: TE.TaskEither<PlayerError, void>;
-};
-
 const playerFromSoundObject = ({ sound }: Audio.SoundObject): AudioPlayer =>
   pipe(
     {
-      play: async () => await sound.playAsync(), // Audio.Sound uses weird mixins, so we need to use the ugly async/await syntax
-      stop: async () => await sound.stopAsync(), // (instead of just sound.stopAsync())
-      unload: async () => await sound.unloadAsync(),
+      play: () => sound.playAsync(), // Audio.Sound uses weird mixins, so we need use the lazy function here
+      stop: () => sound.stopAsync(), // (instead of just sound.stopAsync())
     },
     RR.map((t) =>
       pipe(
         TE.tryCatch(t, (e) => playerError(String(e))),
         TE.chainW((s) => (s.isLoaded ? TE.right(undefined) : TE.left(playerError(s.error ?? 'Unknown error')))),
+      ),
+    ),
+    I.bind('unload', () =>
+      pipe(
+        TE.tryCatch(
+          () => sound.unloadAsync(),
+          (e) => playerError(String(e)),
+        ),
+        TE.chainW((s) => (s.isLoaded ? TE.left(playerError('Unable to unload audio sample')) : TE.right(undefined))),
       ),
     ),
   );
@@ -89,3 +97,5 @@ export const playerFromPulseTrain = flow(
   RTE.fromReader,
   RTE.chainW(playerFromSample),
 );
+
+export type PlayerFromPulseTrainAPI = typeof playerFromPulseTrain;

@@ -10,6 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@expo/webpack-config": "^18.0.1",
     "@types/react": "~18.0.27",
     "@xstate/react": "^3.2.2",
     "expo": "~48.0.15",
@@ -23,7 +24,9 @@
     "newtype-ts": "^0.3.5",
     "parser-ts": "^0.7.0",
     "react": "18.2.0",
+    "react-dom": "18.2.0",
     "react-native": "0.71.8",
+    "react-native-web": "~0.18.10",
     "ts-pattern": "^4.3.0",
     "typescript": "^4.9.4",
     "wavefile": "^11.0.0",
