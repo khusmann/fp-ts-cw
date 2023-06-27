@@ -4,10 +4,12 @@ import { message, word, CW_TOKEN_LOOKUP, TOKEN_SPACE, WORD_SPACE } from '../ast'
 import { calculateTimings, renderSynthSample, tone, silence, buildPulseTrain, synthSampleToPcm } from '../render';
 
 describe('calculateTimings', () => {
+  const wpm = 20;
+  const ews = 1;
+
   it('calculates timings', () => {
-    const wpm = 20;
     const farnsworth = 0;
-    const ews = 1;
+
     const result = calculateTimings({ wpm, farnsworth, ews });
     expect(result.dotTime).toBeCloseTo(0.06);
     expect(result.dashTime).toBeCloseTo(0.18);
@@ -16,23 +18,33 @@ describe('calculateTimings', () => {
   });
 
   it('calculates farnsworth timings', () => {
-    const wpm = 20;
     const farnsworth = 10;
-    const ews = 1;
+
     const result = calculateTimings({ wpm, farnsworth, ews });
     expect(result.dotTime).toBeCloseTo(0.06);
     expect(result.dashTime).toBeCloseTo(0.18);
     expect(result.tokenSpaceTime).toBeCloseTo(0.653);
     expect(result.wordSpaceTime).toBeCloseTo(3.05);
   });
+
+  it('fixes invalid farnsworth timings', () => {
+    const farnsworth = 1000;
+
+    const result = calculateTimings({ wpm, farnsworth, ews });
+    expect(result.dotTime).toBeCloseTo(0.06);
+    expect(result.dashTime).toBeCloseTo(0.18);
+    expect(result.tokenSpaceTime).toBeCloseTo(0.18);
+    expect(result.wordSpaceTime).toBeCloseTo(0.84);
+  });
 });
 
 describe('buildPulseTrain', () => {
+  const dotTime = 1;
+  const dashTime = 2;
+  const tokenSpaceTime = 3;
+  const wordSpaceTime = 4;
+
   it('builds a pulse train from a message', () => {
-    const dotTime = 1;
-    const dashTime = 2;
-    const tokenSpaceTime = 3;
-    const wordSpaceTime = 4;
     const result = pipe(
       message([word([CW_TOKEN_LOOKUP['A'], TOKEN_SPACE, CW_TOKEN_LOOKUP['E']]), WORD_SPACE]),
       buildPulseTrain,
@@ -49,19 +61,21 @@ describe('buildPulseTrain', () => {
 });
 
 describe('renderSynthSample', () => {
-  it('creates properly shaped envelopes', () => {
-    const sampleRate = 8000 as const;
-    const rampTime = 0.005;
-    const volume = 0.5;
-    const freq = 600;
+  const sampleRate = 8000 as const;
+  const rampTime = 0.005;
+  const volume = 0.5;
+  const freq = 600;
 
+  it('creates silences', () => {
     const s = pipe([silence(1)] as const, renderSynthSample, apply({ sampleRate, rampTime, volume, freq }));
 
     expect(s.envelope).toHaveLength(sampleRate);
     expect(s.freq).toBe(freq);
     expect(s.sampleRate).toBe(sampleRate);
     expect(s.envelope.reduce((acc, v) => acc || v)).toBe(0);
+  });
 
+  it('creates tones', () => {
     const t = pipe([tone(1)] as const, renderSynthSample, apply({ sampleRate, rampTime, volume, freq }));
 
     expect(t.envelope).toHaveLength(sampleRate);
@@ -85,13 +99,15 @@ describe('synthSampleToPcm', () => {
   const sampleRate = 8000 as const;
   const envelope = [1, 1, 1, 1, 1] as const;
 
-  const result = pipe({ freq, sampleRate, envelope } as const, synthSampleToPcm, apply({ bitDepth }));
+  it('creates a PCM sample', () => {
+    const result = pipe({ freq, sampleRate, envelope } as const, synthSampleToPcm, apply({ bitDepth }));
 
-  expect(result.sampleRate).toBe(sampleRate);
-  expect(result.bitDepth).toBe(bitDepth);
-  expect(result.data[0]).toBeCloseTo(0);
-  expect(result.data[1]).toBeCloseTo(Math.pow(2, bitDepth - 1) - 1);
-  expect(result.data[2]).toBeCloseTo(0);
-  expect(result.data[3]).toBeCloseTo(-(Math.pow(2, bitDepth - 1) - 1));
-  expect(result.data[4]).toBeCloseTo(0);
+    expect(result.sampleRate).toBe(sampleRate);
+    expect(result.bitDepth).toBe(bitDepth);
+    expect(result.data[0]).toBeCloseTo(0);
+    expect(result.data[1]).toBeCloseTo(Math.pow(2, bitDepth - 1) - 1);
+    expect(result.data[2]).toBeCloseTo(0);
+    expect(result.data[3]).toBeCloseTo(-(Math.pow(2, bitDepth - 1) - 1));
+    expect(result.data[4]).toBeCloseTo(0);
+  });
 });

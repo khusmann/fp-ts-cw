@@ -81,11 +81,12 @@ export const tone = (duration: number): Tone => ({ _tag: 'tone', duration });
 export const silence = (duration: number): Silence => ({ _tag: 'silence', duration });
 
 export const calculateTimings = ({ wpm, farnsworth, ews }: WpmSettings): TimingSettings => {
+  const is_farnsworth = farnsworth > 0 && farnsworth < wpm;
   const dotTime = 1.2 / wpm;
   const dashTime = 3 * dotTime;
   const fdit = (60 - farnsworth * 31 * dotTime) / (farnsworth * (12 + 7));
-  const tokenSpaceTime = farnsworth ? 3 * fdit : 3 * dotTime;
-  const wordSpaceTime = 7 * (ews + 1) * (farnsworth ? fdit : dotTime);
+  const tokenSpaceTime = is_farnsworth ? 3 * fdit : 3 * dotTime;
+  const wordSpaceTime = 7 * (ews + 1) * (is_farnsworth ? fdit : dotTime);
   return {
     dotTime,
     dashTime,
