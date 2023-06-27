@@ -55,6 +55,4 @@ const playerFromSynthSampleImpl =
     );
   };
 
-export { DEFAULT_PLAYER_SETTINGS } from './player';
-
 export const playerFromSynthSample: PlayerFromSynthSampleAPI = RTE.fromReaderK(playerFromSynthSampleImpl);
